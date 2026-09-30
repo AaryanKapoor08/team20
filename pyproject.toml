@@ -20,6 +20,10 @@ dev = [
     "matplotlib==3.11.2",
 ]
 
+# Lets tests use `from app import ...`
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
 # This is an app, not a library, so uv should not try to build or install it
 [tool.uv]
 package = false
