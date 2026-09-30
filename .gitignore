@@ -1,0 +1,23 @@
+# Secrets made on first run (pepper, AES key, Flask secret key)
+keys.json
+
+# Local database
+*.db
+*.sqlite3
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Large or licensed experiment inputs
+wordlists/
+data/
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
