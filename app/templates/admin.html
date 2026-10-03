@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}Admin{% endblock %}
+
+{% block content %}
+<h1>Admin</h1>
+<p>Only admins can see this page. You are {{ user["email"] }}.</p>
+<p><a href="{{ url_for('home') }}">Back to home</a></p>
+{% endblock %}

@@ -8,9 +8,9 @@ from app import passwords
 EXPECTED_TABLES = ["audit_log", "blocked_ips", "login_history", "passkeys", "sessions", "users"]
 
 
-def get_table_names(db_path) -> list:
+def get_table_names() -> list:
     """Return the sorted names of all tables in the database file."""
-    connection = db.get_connection(db_path)
+    connection = db.get_connection()
     rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
     connection.close()
 
@@ -20,28 +20,21 @@ def get_table_names(db_path) -> list:
     return sorted(table_names)
 
 
-def test_every_table_exists_after_setup(tmp_path):
+def test_every_table_exists_after_setup(temp_db):
     """create_tables makes all six tables."""
-    db_path = tmp_path / "test.db"
-    db.create_tables(db_path)
-
-    assert get_table_names(db_path) == EXPECTED_TABLES
+    assert get_table_names() == EXPECTED_TABLES
 
 
-def test_create_tables_twice_gives_no_error(tmp_path):
+def test_create_tables_twice_gives_no_error(temp_db):
     """Running create_tables a second time is safe and keeps the same tables."""
-    db_path = tmp_path / "test.db"
-    db.create_tables(db_path)
-    db.create_tables(db_path)
+    db.create_tables()
 
-    assert get_table_names(db_path) == EXPECTED_TABLES
+    assert get_table_names() == EXPECTED_TABLES
 
 
-def test_rows_can_be_read_by_column_name(tmp_path):
+def test_rows_can_be_read_by_column_name(temp_db):
     """row_factory lets code write row["email"] instead of row[1]."""
-    db_path = tmp_path / "test.db"
-    db.create_tables(db_path)
-    connection = db.get_connection(db_path)
+    connection = db.get_connection()
     connection.execute(
         "INSERT INTO users (email, password_hash) VALUES (?, ?)",
         ("alice@example.com", "fake-hash"),
@@ -62,12 +55,10 @@ def test_utc_now_uses_sortable_text_format():
     assert parsed.strftime(db.TIME_FORMAT) == now_text
 
 
-def test_seed_adds_one_admin_and_three_users(tmp_path):
+def test_seed_adds_one_admin_and_three_users(temp_db):
     """seed_demo_users fills an empty users table with the 4 demo accounts."""
-    db_path = tmp_path / "test.db"
-    db.create_tables(db_path)
-    db.seed_demo_users("test-pepper", db_path)
-    connection = db.get_connection(db_path)
+    db.seed_demo_users("test-pepper")
+    connection = db.get_connection()
     rows = connection.execute("SELECT role FROM users").fetchall()
     connection.close()
 
@@ -77,28 +68,25 @@ def test_seed_adds_one_admin_and_three_users(tmp_path):
     assert sorted(roles) == ["admin", "user", "user", "user"]
 
 
-def test_seed_twice_does_not_add_more_users(tmp_path):
+def test_seed_twice_does_not_add_more_users(temp_db):
     """A second seed sees the users already there and adds nothing."""
-    db_path = tmp_path / "test.db"
-    db.create_tables(db_path)
-    db.seed_demo_users("test-pepper", db_path)
-    db.seed_demo_users("test-pepper", db_path)
-    connection = db.get_connection(db_path)
+    db.seed_demo_users("test-pepper")
+    db.seed_demo_users("test-pepper")
+    connection = db.get_connection()
     user_count = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     connection.close()
 
     assert user_count == 4
 
 
-def test_seeded_password_can_be_checked(tmp_path):
+def test_seeded_password_can_be_checked(temp_db):
     """A demo user's stored hash matches their demo password."""
-    db_path = tmp_path / "test.db"
-    db.create_tables(db_path)
-    db.seed_demo_users("test-pepper", db_path)
-    connection = db.get_connection(db_path)
-    row = connection.execute(
-        "SELECT password_hash FROM users WHERE email = ?", ("alice@example.com",)
-    ).fetchone()
-    connection.close()
+    db.seed_demo_users("test-pepper")
+    user = db.get_user_by_email("alice@example.com")
 
-    assert passwords.check_password(row["password_hash"], "alice-demo-pass", "test-pepper")
+    assert passwords.check_password(user["password_hash"], "alice-demo-pass", "test-pepper")
+
+
+def test_unknown_email_gives_no_user(temp_db):
+    """get_user_by_email returns None when nobody has that email."""
+    assert db.get_user_by_email("nobody@example.com") is None

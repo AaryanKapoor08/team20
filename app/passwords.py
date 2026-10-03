@@ -10,6 +10,10 @@ from argon2.exceptions import VerifyMismatchError
 # from a stolen database takes a very long time. It adds a random salt per hash.
 PASSWORD_HASHER = PasswordHasher()
 
+# Checked against when the email does not exist, so a wrong email takes as long
+# as a wrong password and the response time does not reveal which emails exist.
+DUMMY_HASH = PASSWORD_HASHER.hash("not-a-real-password")
+
 
 def add_pepper(password: str, pepper: str) -> str:
     """Mix the secret pepper into the password with HMAC-SHA256."""

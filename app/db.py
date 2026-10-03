@@ -2,7 +2,6 @@
 
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 
 from app import config
 from app import passwords
@@ -84,9 +83,10 @@ CREATE TABLE IF NOT EXISTS blocked_ips (
 """
 
 
-def get_connection(db_path: Path = config.DB_PATH) -> sqlite3.Connection:
+def get_connection() -> sqlite3.Connection:
     """Open the database so rows can be read by column name, like row["email"]."""
-    connection = sqlite3.connect(db_path)
+    # config.DB_PATH is read on every call, so tests can point it at a temp file
+    connection = sqlite3.connect(config.DB_PATH)
     connection.row_factory = sqlite3.Row
     # SQLite skips REFERENCES checks unless this is turned on for each connection
     connection.execute("PRAGMA foreign_keys = ON")
@@ -98,17 +98,17 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).strftime(TIME_FORMAT)
 
 
-def create_tables(db_path: Path = config.DB_PATH) -> None:
+def create_tables() -> None:
     """Make every table the app needs. Safe to call more than once."""
-    connection = get_connection(db_path)
+    connection = get_connection()
     connection.executescript(TABLES_SQL)
     connection.commit()
     connection.close()
 
 
-def seed_demo_users(pepper: str, db_path: Path = config.DB_PATH) -> None:
+def seed_demo_users(pepper: str) -> None:
     """Add the demo accounts, but only if the users table is empty."""
-    connection = get_connection(db_path)
+    connection = get_connection()
     user_count = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     if user_count > 0:
         connection.close()
@@ -120,5 +120,24 @@ def seed_demo_users(pepper: str, db_path: Path = config.DB_PATH) -> None:
             "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
             (email, password_hash, role),
         )
+    connection.commit()
+    connection.close()
+
+
+def get_user_by_email(email: str) -> sqlite3.Row | None:
+    """Return the user with this email, or None if there is no such user."""
+    connection = get_connection()
+    user_row = connection.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    connection.close()
+    return user_row
+
+
+def record_login_attempt(user_id: int | None, ip: str, success: bool) -> None:
+    """Save one login attempt, good or bad, to login_history."""
+    connection = get_connection()
+    connection.execute(
+        "INSERT INTO login_history (user_id, time, ip, success) VALUES (?, ?, ?, ?)",
+        (user_id, utc_now(), ip, success),
+    )
     connection.commit()
     connection.close()
