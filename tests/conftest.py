@@ -15,7 +15,12 @@ def temp_db(monkeypatch, tmp_path):
 
 
 @pytest.fixture
-def client(temp_db):
-    """Return a test browser for the app, with the demo users added."""
+def demo_users(temp_db):
+    """Add the 4 demo users to the temp database."""
     db.seed_demo_users(routes.keys["pepper"])
+
+
+@pytest.fixture
+def client(demo_users):
+    """Return a test browser for the app, with the demo users added."""
     return routes.app.test_client()

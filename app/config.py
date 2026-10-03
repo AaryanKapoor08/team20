@@ -24,6 +24,23 @@ IP_WINDOW_MINUTES = 10
 LOCKOUT_FAILURES = 10
 LOCKOUT_MINUTES = 15
 
+# Risk engine (ADAPTIVE). Experiments change these to trade safety against
+# how often real users get asked for an extra check.
+RISK_MEDIUM = 3
+RISK_HIGH = 7
+# So risky that the IP gets blocked (used by the firewall later)
+RISK_BLOCK = 12
+# Points when a value is new or rare for this user (half if it is common for everyone)
+FEATURE_POINTS = {"ip": 1, "asn": 2, "country": 3, "browser": 2, "os": 1, "device": 1}
+# A value seen in at least this share of logins counts as usual
+USUAL_SHARE = 0.1
+# Velocity: how many things happened in the last RISK_WINDOW_MINUTES
+RISK_WINDOW_MINUTES = 10
+SITE_FAIL_LIMIT = 20
+ACCOUNT_FAIL_LIMIT = 3
+IP_ACCOUNTS_LIMIT = 3
+VELOCITY_POINTS = 3
+
 
 def load_keys(keys_path: Path = KEYS_PATH) -> dict:
     """Read the secret keys, or make and save new ones on the first run."""
