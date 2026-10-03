@@ -13,6 +13,7 @@ keys = config.load_keys()
 app.secret_key = keys["flask_secret_key"]
 
 db.create_tables()
+db.seed_demo_users(keys["pepper"])
 
 
 @app.route("/")

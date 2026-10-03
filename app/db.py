@@ -5,6 +5,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app import config
+from app import passwords
+
+# Demo accounts for trying the app. These passwords are public (listed in the README),
+# so they are only for local testing.
+DEMO_USERS = [
+    ("admin@example.com", "admin-demo-pass", "admin"),
+    ("alice@example.com", "alice-demo-pass", "user"),
+    ("bob@example.com", "bob-demo-pass", "user"),
+    ("carol@example.com", "carol-demo-pass", "user"),
+]
 
 # Every time is stored as UTC text like 2026-10-04T12:00:00.
 # Text in this format sorts and compares in the right order.
@@ -92,5 +102,23 @@ def create_tables(db_path: Path = config.DB_PATH) -> None:
     """Make every table the app needs. Safe to call more than once."""
     connection = get_connection(db_path)
     connection.executescript(TABLES_SQL)
+    connection.commit()
+    connection.close()
+
+
+def seed_demo_users(pepper: str, db_path: Path = config.DB_PATH) -> None:
+    """Add the demo accounts, but only if the users table is empty."""
+    connection = get_connection(db_path)
+    user_count = connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if user_count > 0:
+        connection.close()
+        return
+
+    for email, password, role in DEMO_USERS:
+        password_hash = passwords.hash_password(password, pepper)
+        connection.execute(
+            "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
+            (email, password_hash, role),
+        )
     connection.commit()
     connection.close()
