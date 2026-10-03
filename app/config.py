@@ -7,6 +7,8 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 KEYS_PATH = PROJECT_DIR / "keys.json"
 KEY_NAMES = ["pepper", "aes_key", "flask_secret_key"]
+# The SQLite file; *.db is in .gitignore so it is never committed
+DB_PATH = PROJECT_DIR / "team20.db"
 
 
 def load_keys(keys_path: Path = KEYS_PATH) -> dict:

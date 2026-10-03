@@ -3,6 +3,7 @@
 from flask import Flask
 
 from app import config
+from app import db
 
 app = Flask(__name__)
 
@@ -10,6 +11,8 @@ app = Flask(__name__)
 # It comes from keys.json, never from the code.
 keys = config.load_keys()
 app.secret_key = keys["flask_secret_key"]
+
+db.create_tables()
 
 
 @app.route("/")
