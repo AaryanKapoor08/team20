@@ -2,6 +2,7 @@
 
 from flask import Flask, abort, redirect, render_template, request, url_for
 
+from app import client_context
 from app import config
 from app import csrf
 from app import db
@@ -65,32 +66,33 @@ def login():
 
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
+    context = client_context.get_context(request)
 
     # The IP check comes first, so a blocked IP learns nothing about any account
-    if limits.is_ip_blocked(request.remote_addr):
-        return refuse_login(None, TOO_MANY_ATTEMPTS, 429)
+    if limits.is_ip_blocked(context["ip"]):
+        return refuse_login(context, None, TOO_MANY_ATTEMPTS, 429)
 
     user = db.get_user_by_email(email)
     if user is None:
         # Do a full password check anyway, so a wrong email is not faster than a wrong password
         passwords.check_password(passwords.DUMMY_HASH, password, keys["pepper"])
-        return refuse_login(None, LOGIN_ERROR, 401)
+        return refuse_login(context, None, LOGIN_ERROR, 401)
 
     if limits.is_account_locked(user):
-        return refuse_login(user["id"], TOO_MANY_ATTEMPTS, 429)
+        return refuse_login(context, user["id"], TOO_MANY_ATTEMPTS, 429)
 
     if not passwords.check_password(user["password_hash"], password, keys["pepper"]):
         limits.record_failure(user)
-        return refuse_login(user["id"], LOGIN_ERROR, 401)
+        return refuse_login(context, user["id"], LOGIN_ERROR, 401)
 
     limits.record_success(user)
-    db.record_login_attempt(user["id"], request.remote_addr, True)
+    db.record_login_attempt(user["id"], context, True)
     return start_session(user["id"])
 
 
-def refuse_login(user_id, message: str, status_code: int):
+def refuse_login(context: dict, user_id, message: str, status_code: int):
     """Save the failed attempt and show the login page again with a message."""
-    db.record_login_attempt(user_id, request.remote_addr, False)
+    db.record_login_attempt(user_id, context, False)
     return render_template("login.html", error=message), status_code
 
 

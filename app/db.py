@@ -132,12 +132,23 @@ def get_user_by_email(email: str) -> sqlite3.Row | None:
     return user_row
 
 
-def record_login_attempt(user_id: int | None, ip: str, success: bool) -> None:
-    """Save one login attempt, good or bad, to login_history."""
+def record_login_attempt(user_id: int | None, context: dict, success: bool) -> None:
+    """Save one login attempt, good or bad, with where it came from."""
     connection = get_connection()
     connection.execute(
-        "INSERT INTO login_history (user_id, time, ip, success) VALUES (?, ?, ?, ?)",
-        (user_id, utc_now(), ip, success),
+        "INSERT INTO login_history (user_id, time, ip, country, asn, browser, os, device, success) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            user_id,
+            utc_now(),
+            context["ip"],
+            context["country"],
+            context["asn"],
+            context["browser"],
+            context["os"],
+            context["device"],
+            success,
+        ),
     )
     connection.commit()
     connection.close()

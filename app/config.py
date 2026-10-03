@@ -14,6 +14,10 @@ DB_PATH = PROJECT_DIR / "team20.db"
 # "ADAPTIVE" also turns on the risk check and extra login steps from Part 2.
 SECURITY_PROFILE = "BASELINE"
 
+# Lab mode lets attack scripts fake their IP, country, ASN and browser with the
+# X-Lab-Client header. Off by default: tests and attack runs turn it on.
+LAB_MODE = False
+
 # BASELINE numbers. Experiments change these to compare settings.
 IP_FAIL_LIMIT = 5
 IP_WINDOW_MINUTES = 10
