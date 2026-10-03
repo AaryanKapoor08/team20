@@ -10,6 +10,16 @@ KEY_NAMES = ["pepper", "aes_key", "flask_secret_key"]
 # The SQLite file; *.db is in .gitignore so it is never committed
 DB_PATH = PROJECT_DIR / "team20.db"
 
+# "BASELINE" is what most sites do: rate limit + lockout only.
+# "ADAPTIVE" also turns on the risk check and extra login steps from Part 2.
+SECURITY_PROFILE = "BASELINE"
+
+# BASELINE numbers. Experiments change these to compare settings.
+IP_FAIL_LIMIT = 5
+IP_WINDOW_MINUTES = 10
+LOCKOUT_FAILURES = 10
+LOCKOUT_MINUTES = 15
+
 
 def load_keys(keys_path: Path = KEYS_PATH) -> dict:
     """Read the secret keys, or make and save new ones on the first run."""

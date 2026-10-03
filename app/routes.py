@@ -5,6 +5,7 @@ from flask import Flask, abort, redirect, render_template, request, url_for
 from app import config
 from app import csrf
 from app import db
+from app import limits
 from app import passwords
 from app import sessions
 
@@ -12,6 +13,7 @@ SESSION_COOKIE = "session_token"
 # Same message for a wrong email and a wrong password, so attackers cannot tell
 # which emails have an account
 LOGIN_ERROR = "Wrong email or password."
+TOO_MANY_ATTEMPTS = "Too many attempts. Try again later."
 
 app = Flask(__name__)
 
@@ -63,21 +65,38 @@ def login():
 
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
-    ip = request.remote_addr
-    user = db.get_user_by_email(email)
 
+    # The IP check comes first, so a blocked IP learns nothing about any account
+    if limits.is_ip_blocked(request.remote_addr):
+        return refuse_login(None, TOO_MANY_ATTEMPTS, 429)
+
+    user = db.get_user_by_email(email)
     if user is None:
         # Do a full password check anyway, so a wrong email is not faster than a wrong password
         passwords.check_password(passwords.DUMMY_HASH, password, keys["pepper"])
-        db.record_login_attempt(None, ip, False)
-        return render_template("login.html", error=LOGIN_ERROR), 401
+        return refuse_login(None, LOGIN_ERROR, 401)
+
+    if limits.is_account_locked(user):
+        return refuse_login(user["id"], TOO_MANY_ATTEMPTS, 429)
 
     if not passwords.check_password(user["password_hash"], password, keys["pepper"]):
-        db.record_login_attempt(user["id"], ip, False)
-        return render_template("login.html", error=LOGIN_ERROR), 401
+        limits.record_failure(user)
+        return refuse_login(user["id"], LOGIN_ERROR, 401)
 
-    db.record_login_attempt(user["id"], ip, True)
-    token = sessions.create_session(user["id"])
+    limits.record_success(user)
+    db.record_login_attempt(user["id"], request.remote_addr, True)
+    return start_session(user["id"])
+
+
+def refuse_login(user_id, message: str, status_code: int):
+    """Save the failed attempt and show the login page again with a message."""
+    db.record_login_attempt(user_id, request.remote_addr, False)
+    return render_template("login.html", error=message), status_code
+
+
+def start_session(user_id: int):
+    """Make a session for the user, set its cookie and go to the home page."""
+    token = sessions.create_session(user_id)
     response = redirect(url_for("home"))
     # secure=False because the app runs on plain http://localhost
     max_age = int(sessions.SESSION_LIFETIME.total_seconds())
