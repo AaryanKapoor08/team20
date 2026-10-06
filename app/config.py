@@ -43,6 +43,13 @@ VELOCITY_POINTS = 3
 # How long a half logged in user has to pass the extra check
 PENDING_MINUTES = 5
 
+# Passkeys are tied to the site's address. A browser only signs for this exact
+# origin, so a look-alike phishing site cannot use a passkey made here.
+# Passkeys refuse IP addresses, which is why the app always runs on "localhost".
+PASSKEY_RP_ID = "localhost"
+PASSKEY_RP_NAME = "Team 20"
+PASSKEY_ORIGIN = "http://localhost:8000"
+
 
 def load_keys(keys_path: Path = KEYS_PATH) -> dict:
     """Read the secret keys, or make and save new ones on the first run."""

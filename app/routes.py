@@ -1,7 +1,6 @@
-"""Creates the Flask app and holds all the page routes."""
+"""Creates the Flask app and holds the login, logout, home and admin pages."""
 
 from flask import Flask, abort, redirect, render_template, request, url_for
-from flask import session as flask_session
 
 from app import client_context
 from app import config
@@ -11,15 +10,13 @@ from app import limits
 from app import passwords
 from app import risk
 from app import sessions
-from app import totp
+from app import step_up_routes
 
-SESSION_COOKIE = "session_token"
 # Same message for a wrong email and a wrong password, so attackers cannot tell
 # which emails have an account
 LOGIN_ERROR = "Wrong email or password."
-TOO_MANY_ATTEMPTS = "Too many attempts. Try again later."
+TOO_MANY_ATTEMPTS = step_up_routes.TOO_MANY_ATTEMPTS
 UNUSUAL_LOGIN = "This login looks unusual and was blocked. Try again from your usual device."
-WRONG_CODE = "That code is wrong or was already used."
 
 app = Flask(__name__)
 
@@ -32,15 +29,11 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # Lets every template write {{ csrf_token() }} inside its forms
 app.jinja_env.globals["csrf_token"] = csrf.make_token
+# The TOTP and passkey pages live in their own file
+app.register_blueprint(step_up_routes.step_up)
 
 db.create_tables()
 db.seed_demo_users(keys["pepper"])
-
-
-def current_user():
-    """Return the logged in user for this request, or None."""
-    token = request.cookies.get(SESSION_COOKIE, "")
-    return sessions.get_user_for_token(token)
 
 
 @app.before_request
@@ -57,10 +50,11 @@ def check_csrf_token():
 @app.route("/")
 def home():
     """Show who is logged in, or send the visitor to the login page."""
-    user = current_user()
+    user = sessions.current_user()
     if user is None:
         return redirect(url_for("login"))
-    return render_template("home.html", user=user)
+    has_passkey = db.has_passkey(user["id"])
+    return render_template("home.html", user=user, has_passkey=has_passkey)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -94,7 +88,7 @@ def login():
     if config.SECURITY_PROFILE != "ADAPTIVE":
         limits.record_success(user)
         db.record_login_attempt(user["id"], context, True)
-        return start_session(user["id"])
+        return sessions.log_in(user["id"])
     return adaptive_login(user, context)
 
 
@@ -112,15 +106,15 @@ def adaptive_login(user, context: dict):
 
     if step == "login":
         limits.record_success(user)
-        return start_session(user["id"])
+        return sessions.log_in(user["id"])
     # The failure count is not cleared yet. Otherwise an attacker with the password could
     # guess codes, log in again to reset the count, and keep guessing forever.
     if step == "block":
         return render_template("login.html", error=UNUSUAL_LOGIN), 403
     sessions.start_pending(user["id"], step)
     if step == "totp":
-        return redirect(url_for("verify_totp"))
-    return redirect(url_for("verify_passkey"))
+        return redirect(url_for("step_up.verify_totp"))
+    return redirect(url_for("step_up.verify_passkey"))
 
 
 def refuse_login(context: dict, user_id, message: str, status_code: int):
@@ -129,96 +123,22 @@ def refuse_login(context: dict, user_id, message: str, status_code: int):
     return render_template("login.html", error=message), status_code
 
 
-def start_session(user_id: int):
-    """Make a session for the user, set its cookie and go to the home page."""
-    sessions.clear_pending()
-    token = sessions.create_session(user_id)
-    response = redirect(url_for("home"))
-    # secure=False because the app runs on plain http://localhost
-    max_age = int(sessions.SESSION_LIFETIME.total_seconds())
-    response.set_cookie(SESSION_COOKIE, token, max_age=max_age, httponly=True, samesite="Lax")
-    return response
-
-
 @app.route("/logout", methods=["POST"])
 def logout():
     """End the session in the database and remove the cookie."""
-    token = request.cookies.get(SESSION_COOKIE, "")
+    token = request.cookies.get(sessions.SESSION_COOKIE, "")
     sessions.delete_session(token)
     response = redirect(url_for("login"))
-    response.delete_cookie(SESSION_COOKIE)
+    response.delete_cookie(sessions.SESSION_COOKIE)
     return response
 
 
 @app.route("/admin")
 def admin():
     """Show the admin page, only to users with the admin role."""
-    user = current_user()
+    user = sessions.current_user()
     if user is None:
         return redirect(url_for("login"))
     if user["role"] != "admin":
         abort(403)
     return render_template("admin.html", user=user)
-
-
-@app.route("/setup/totp", methods=["GET", "POST"])
-def setup_totp():
-    """Let a logged in user add an authenticator app by scanning a QR code."""
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-    if user["totp_secret_encrypted"] is not None:
-        return redirect(url_for("home"))
-    if request.method == "GET":
-        # Held in Flask's signed cookie until the user proves their phone has it
-        flask_session["totp_setup_secret"] = totp.new_secret()
-        return show_totp_setup(user, None)
-
-    secret = flask_session.get("totp_setup_secret")
-    if secret is None:
-        return redirect(url_for("setup_totp"))
-    code = request.form.get("code", "").strip()
-    step = totp.matching_step(secret, code)
-    if step is None:
-        return show_totp_setup(user, WRONG_CODE), 400
-    totp.save_secret(user["id"], secret, keys["aes_key"], step)
-    flask_session.pop("totp_setup_secret")
-    return redirect(url_for("home"))
-
-
-def show_totp_setup(user, error: str | None):
-    """Show the QR code page for the secret being set up."""
-    secret = flask_session["totp_setup_secret"]
-    qr_svg = totp.qr_code_svg(secret, user["email"])
-    return render_template("totp_setup.html", qr_svg=qr_svg, secret=secret, error=error)
-
-
-@app.route("/verify/totp", methods=["GET", "POST"])
-def verify_totp():
-    """Ask a half logged in user for the code from their authenticator app."""
-    user_id = sessions.get_pending_user_id("totp")
-    if user_id is None:
-        return redirect(url_for("login"))
-    if request.method == "GET":
-        return render_template("verify_totp.html")
-
-    user = db.get_user_by_id(user_id)
-    # Wrong codes count toward the same lockout as wrong passwords,
-    # so nobody can try all one million codes
-    if limits.is_account_locked(user):
-        sessions.clear_pending()
-        return render_template("login.html", error=TOO_MANY_ATTEMPTS), 429
-    code = request.form.get("code", "").strip()
-    if not totp.verify_code(user, code, keys["aes_key"]):
-        limits.record_failure(user)
-        return render_template("verify_totp.html", error=WRONG_CODE), 401
-    limits.record_success(user)
-    return start_session(user_id)
-
-
-@app.route("/verify/passkey")
-def verify_passkey():
-    """Ask a half logged in user for their passkey (placeholder for now)."""
-    if sessions.get_pending_user_id("passkey") is None:
-        return redirect(url_for("login"))
-    return render_template("verify.html", check_name="passkey")

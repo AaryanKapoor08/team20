@@ -11,6 +11,7 @@ from app import config
 from app import db
 
 SESSION_LIFETIME = timedelta(hours=8)
+SESSION_COOKIE = "session_token"
 
 
 def hash_token(token: str) -> str:
@@ -49,6 +50,24 @@ def get_user_for_token(token: str) -> sqlite3.Row | None:
     ).fetchone()
     connection.close()
     return user_row
+
+
+def current_user() -> sqlite3.Row | None:
+    """Return the logged in user for this request, or None."""
+    token = flask.request.cookies.get(SESSION_COOKIE, "")
+    return get_user_for_token(token)
+
+
+def log_in(user_id: int) -> flask.Response:
+    """Make a session for the user, set its cookie and go to the home page."""
+    clear_pending()
+    token = create_session(user_id)
+    response = flask.redirect(flask.url_for("home"))
+    # HttpOnly: page scripts cannot read the cookie. Lax: other sites' forms do not send it.
+    # secure=False because the app runs on plain http://localhost
+    max_age = int(SESSION_LIFETIME.total_seconds())
+    response.set_cookie(SESSION_COOKIE, token, max_age=max_age, httponly=True, samesite="Lax")
+    return response
 
 
 def delete_session(token: str) -> None:

@@ -207,11 +207,14 @@ def current_code(secret: str) -> str:
     return pyotp.TOTP(secret).now()
 
 
-def send_code(client, page: str, code: str):
-    """Post a code to a page with the CSRF token."""
+def send_code(client, page: str, code: str, lab_client: dict | None = None):
+    """Post a code to a page with the CSRF token, optionally faking where it comes from."""
     with client.session_transaction() as flask_session:
         csrf_token = flask_session["csrf_token"]
-    return client.post(page, data={"code": code, "csrf_token": csrf_token})
+    headers = {}
+    if lab_client is not None:
+        headers["X-Lab-Client"] = json.dumps(lab_client)
+    return client.post(page, data={"code": code, "csrf_token": csrf_token}, headers=headers)
 
 
 def test_right_code_finishes_a_medium_risk_login(adaptive):
@@ -222,6 +225,18 @@ def test_right_code_finishes_a_medium_risk_login(adaptive):
 
     assert response.headers["Location"] == "/"
     assert b"alice@example.com" in adaptive.get("/").data
+
+
+def test_passed_code_check_is_saved_as_a_success(adaptive):
+    """A login that passed the code check is saved as a success, so the new place is learned."""
+    secret = give_alice_real_totp()
+    log_in_from(adaptive, ABROAD)
+    send_code(adaptive, "/verify/totp", current_code(secret), ABROAD)
+    row = last_login_row()
+
+    assert row["success"] == 1
+    assert row["country"] == "BR"
+    assert row["risk_reasons"] == "passed TOTP check"
 
 
 def test_wrong_code_gives_no_session(adaptive):

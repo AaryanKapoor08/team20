@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Use your passkey{% endblock %}
+
+{% block content %}
+<h1>One more step</h1>
+<p>This login looks very different from your usual ones. Use your passkey to prove it is you.</p>
+
+{% if error %}
+<p role="alert">{{ error }}</p>
+{% endif %}
+<p role="alert" id="passkey-error" hidden></p>
+
+{# passkey.js fills in "credential" with the device's answer and sends the form #}
+<form id="passkey-form" method="post" action="{{ url_for('step_up.verify_passkey') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="credential" id="passkey-credential">
+    <button type="button" id="passkey-button" data-mode="login" data-options="{{ options_json }}">
+        Use passkey
+    </button>
+</form>
+
+<p><a href="{{ url_for('login') }}">Back to log in</a></p>
+
+<script src="{{ url_for('static', filename='simplewebauthn-browser.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='passkey.js') }}"></script>
+{% endblock %}
