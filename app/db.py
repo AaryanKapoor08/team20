@@ -132,12 +132,33 @@ def get_user_by_email(email: str) -> sqlite3.Row | None:
     return user_row
 
 
-def record_login_attempt(user_id: int | None, context: dict, success: bool) -> None:
-    """Save one login attempt, good or bad, with where it came from."""
+def has_passkey(user_id: int) -> bool:
+    """Return True if the user has registered at least one passkey."""
+    connection = get_connection()
+    passkey_count = connection.execute(
+        "SELECT COUNT(*) FROM passkeys WHERE user_id = ?", (user_id,)
+    ).fetchone()[0]
+    connection.close()
+    return passkey_count > 0
+
+
+def record_login_attempt(
+    user_id: int | None,
+    context: dict,
+    success: bool,
+    risk_level: str | None = None,
+    risk_reasons: list | None = None,
+) -> None:
+    """Save one login attempt, good or bad, with where it came from and its risk."""
+    reasons_text = None
+    if risk_reasons is not None:
+        reasons_text = "; ".join(risk_reasons)
+
     connection = get_connection()
     connection.execute(
-        "INSERT INTO login_history (user_id, time, ip, country, asn, browser, os, device, success) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO login_history "
+        "(user_id, time, ip, country, asn, browser, os, device, success, risk_level, risk_reasons) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             user_id,
             utc_now(),
@@ -148,6 +169,8 @@ def record_login_attempt(user_id: int | None, context: dict, success: bool) -> N
             context["os"],
             context["device"],
             success,
+            risk_level,
+            reasons_text,
         ),
     )
     connection.commit()

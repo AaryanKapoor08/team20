@@ -128,6 +128,18 @@ def risk_level(score: int) -> str:
     return "low"
 
 
+def choose_step(level: str, has_totp: bool, has_passkey: bool) -> str:
+    """Pick what happens next: "login", "totp", "passkey" or "block"."""
+    if level == "low":
+        return "login"
+    # A medium login with no authenticator app has no code to ask for, so it is treated as high
+    if level == "medium" and has_totp:
+        return "totp"
+    if has_passkey:
+        return "passkey"
+    return "block"
+
+
 def score_login(user_id: int, context: dict) -> dict:
     """Score a login whose password was correct. Returns score, level and reasons."""
     score = 0

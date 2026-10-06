@@ -8,6 +8,7 @@ from app import csrf
 from app import db
 from app import limits
 from app import passwords
+from app import risk
 from app import sessions
 
 SESSION_COOKIE = "session_token"
@@ -15,6 +16,7 @@ SESSION_COOKIE = "session_token"
 # which emails have an account
 LOGIN_ERROR = "Wrong email or password."
 TOO_MANY_ATTEMPTS = "Too many attempts. Try again later."
+UNUSUAL_LOGIN = "This login looks unusual and was blocked. Try again from your usual device."
 
 app = Flask(__name__)
 
@@ -86,8 +88,33 @@ def login():
         return refuse_login(context, user["id"], LOGIN_ERROR, 401)
 
     limits.record_success(user)
-    db.record_login_attempt(user["id"], context, True)
-    return start_session(user["id"])
+    # BASELINE is the "most sites" setup: a right password is enough
+    if config.SECURITY_PROFILE != "ADAPTIVE":
+        db.record_login_attempt(user["id"], context, True)
+        return start_session(user["id"])
+    return adaptive_login(user, context)
+
+
+def adaptive_login(user, context: dict):
+    """Score a login with a right password, then let it in, ask for more, or block it."""
+    result = risk.score_login(user["id"], context)
+    has_totp = user["totp_secret_encrypted"] is not None
+    has_passkey = db.has_passkey(user["id"])
+    step = risk.choose_step(result["level"], has_totp, has_passkey)
+
+    # Only a finished login is saved as a success. Otherwise an attacker with a stolen
+    # password, stuck at the extra check, would teach the risk engine their country is normal.
+    finished = step == "login"
+    db.record_login_attempt(user["id"], context, finished, result["level"], result["reasons"])
+
+    if step == "login":
+        return start_session(user["id"])
+    if step == "block":
+        return render_template("login.html", error=UNUSUAL_LOGIN), 403
+    sessions.start_pending(user["id"], step)
+    if step == "totp":
+        return redirect(url_for("verify_totp"))
+    return redirect(url_for("verify_passkey"))
 
 
 def refuse_login(context: dict, user_id, message: str, status_code: int):
@@ -98,6 +125,7 @@ def refuse_login(context: dict, user_id, message: str, status_code: int):
 
 def start_session(user_id: int):
     """Make a session for the user, set its cookie and go to the home page."""
+    sessions.clear_pending()
     token = sessions.create_session(user_id)
     response = redirect(url_for("home"))
     # secure=False because the app runs on plain http://localhost
@@ -125,3 +153,19 @@ def admin():
     if user["role"] != "admin":
         abort(403)
     return render_template("admin.html", user=user)
+
+
+@app.route("/verify/totp")
+def verify_totp():
+    """Ask a half logged in user for their authenticator code (placeholder for now)."""
+    if sessions.get_pending_user_id("totp") is None:
+        return redirect(url_for("login"))
+    return render_template("verify.html", check_name="authenticator code")
+
+
+@app.route("/verify/passkey")
+def verify_passkey():
+    """Ask a half logged in user for their passkey (placeholder for now)."""
+    if sessions.get_pending_user_id("passkey") is None:
+        return redirect(url_for("login"))
+    return render_template("verify.html", check_name="passkey")

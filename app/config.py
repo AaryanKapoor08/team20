@@ -40,6 +40,8 @@ SITE_FAIL_LIMIT = 20
 ACCOUNT_FAIL_LIMIT = 3
 IP_ACCOUNTS_LIMIT = 3
 VELOCITY_POINTS = 3
+# How long a half logged in user has to pass the extra check
+PENDING_MINUTES = 5
 
 
 def load_keys(keys_path: Path = KEYS_PATH) -> dict:

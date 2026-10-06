@@ -5,6 +5,9 @@ import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+import flask
+
+from app import config
 from app import db
 
 SESSION_LIFETIME = timedelta(hours=8)
@@ -54,3 +57,31 @@ def delete_session(token: str) -> None:
     connection.execute("DELETE FROM sessions WHERE token_hash = ?", (hash_token(token),))
     connection.commit()
     connection.close()
+
+
+def start_pending(user_id: int, step: str) -> None:
+    """Remember a login that passed the password but still needs an extra check."""
+    # Kept in Flask's signed cookie, so the browser cannot change the user id or the step.
+    # This is not a session: protected pages only look at the session_token cookie.
+    expires = datetime.now(timezone.utc) + timedelta(minutes=config.PENDING_MINUTES)
+    flask.session["pending_user_id"] = user_id
+    flask.session["pending_step"] = step
+    flask.session["pending_expires"] = expires.strftime(db.TIME_FORMAT)
+
+
+def get_pending_user_id(step: str) -> int | None:
+    """Return the half logged in user's id, if the marker is for this step and not expired."""
+    # The step must match, so a login sent to the passkey check cannot pick the easier code check
+    if flask.session.get("pending_step") != step:
+        return None
+    if flask.session.get("pending_expires", "") < db.utc_now():
+        clear_pending()
+        return None
+    return flask.session.get("pending_user_id")
+
+
+def clear_pending() -> None:
+    """Forget the half logged in marker."""
+    flask.session.pop("pending_user_id", None)
+    flask.session.pop("pending_step", None)
+    flask.session.pop("pending_expires", None)
