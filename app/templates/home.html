@@ -6,6 +6,12 @@
 <h1>Home</h1>
 <p>Logged in as <strong>{{ user["email"] }}</strong> ({{ user["role"] }}).</p>
 
+{% if user["totp_secret_encrypted"] is none %}
+<p><a href="{{ url_for('setup_totp') }}">Set up an authenticator app</a></p>
+{% else %}
+<p>Authenticator app: on</p>
+{% endif %}
+
 {% if user["role"] == "admin" %}
 <p><a href="{{ url_for('admin') }}">Admin page</a></p>
 {% endif %}

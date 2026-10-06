@@ -2,11 +2,14 @@
 
 import json
 
+import pyotp
 import pytest
 
 from app import client_context
 from app import config
 from app import db
+from app import routes
+from app import totp
 
 ALICE_EMAIL = "alice@example.com"
 ALICE_PASSWORD = "alice-demo-pass"
@@ -190,3 +193,103 @@ def test_marker_is_cleared_when_a_session_starts(adaptive):
 
     with adaptive.session_transaction() as flask_session:
         assert "pending_user_id" not in flask_session
+
+
+def give_alice_real_totp() -> str:
+    """Set up a real authenticator secret for Alice and return it."""
+    secret = totp.new_secret()
+    totp.save_secret(alice_user_id(), secret, routes.keys["aes_key"], 0)
+    return secret
+
+
+def current_code(secret: str) -> str:
+    """Return the code the phone shows right now."""
+    return pyotp.TOTP(secret).now()
+
+
+def send_code(client, page: str, code: str):
+    """Post a code to a page with the CSRF token."""
+    with client.session_transaction() as flask_session:
+        csrf_token = flask_session["csrf_token"]
+    return client.post(page, data={"code": code, "csrf_token": csrf_token})
+
+
+def test_right_code_finishes_a_medium_risk_login(adaptive):
+    """After a new-country login, the right code gives a real session."""
+    secret = give_alice_real_totp()
+    log_in_from(adaptive, ABROAD)
+    response = send_code(adaptive, "/verify/totp", current_code(secret))
+
+    assert response.headers["Location"] == "/"
+    assert b"alice@example.com" in adaptive.get("/").data
+
+
+def test_wrong_code_gives_no_session(adaptive):
+    """A wrong code shows an error and does not log in."""
+    give_alice_real_totp()
+    log_in_from(adaptive, ABROAD)
+    response = send_code(adaptive, "/verify/totp", "12345x")
+
+    assert response.status_code == 401
+    assert b"wrong or was already used" in response.data
+    assert adaptive.get("/").headers["Location"] == "/login"
+
+
+def test_wrong_codes_lock_the_account(adaptive, monkeypatch):
+    """Wrong codes count toward lockout, and a right password does not reset the count."""
+    monkeypatch.setattr(config, "LOCKOUT_FAILURES", 3)
+    # A high limit so this test is about the account lock, not the IP limit
+    monkeypatch.setattr(config, "IP_FAIL_LIMIT", 100)
+    secret = give_alice_real_totp()
+    log_in_from(adaptive, ABROAD)
+    send_code(adaptive, "/verify/totp", "12345x")
+    send_code(adaptive, "/verify/totp", "12345x")
+    log_in_from(adaptive, ABROAD)
+    send_code(adaptive, "/verify/totp", "12345x")
+    response = send_code(adaptive, "/verify/totp", current_code(secret))
+
+    assert response.status_code == 429
+    assert adaptive.get("/").headers["Location"] == "/login"
+
+
+def test_setup_saves_the_secret_after_one_right_code(client):
+    """Scanning the QR code and typing one code turns the authenticator app on."""
+    log_in_from(client, HOME)
+    page = client.get("/setup/totp")
+    with client.session_transaction() as flask_session:
+        secret = flask_session["totp_setup_secret"]
+    response = send_code(client, "/setup/totp", current_code(secret))
+
+    assert b"<svg" in page.data
+    assert response.headers["Location"] == "/"
+    assert db.get_user_by_email(ALICE_EMAIL)["totp_secret_encrypted"] is not None
+    assert b"Authenticator app: on" in client.get("/").data
+
+
+def test_setup_with_wrong_code_saves_nothing(client):
+    """A wrong code during setup does not turn the app on."""
+    log_in_from(client, HOME)
+    client.get("/setup/totp")
+    response = send_code(client, "/setup/totp", "12345x")
+
+    assert response.status_code == 400
+    assert db.get_user_by_email(ALICE_EMAIL)["totp_secret_encrypted"] is None
+
+
+def test_setup_code_cannot_be_used_again_to_log_in(adaptive):
+    """The code typed during setup is already spent for the login check."""
+    log_in_from(adaptive, HOME)
+    adaptive.get("/setup/totp")
+    with adaptive.session_transaction() as flask_session:
+        secret = flask_session["totp_setup_secret"]
+    code = current_code(secret)
+    send_code(adaptive, "/setup/totp", code)
+    log_in_from(adaptive, ABROAD)
+    response = send_code(adaptive, "/verify/totp", code)
+
+    assert response.status_code == 401
+
+
+def test_setup_page_needs_a_login(client):
+    """Without a session the setup page sends you to log in."""
+    assert client.get("/setup/totp").headers["Location"] == "/login"

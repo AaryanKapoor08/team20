@@ -132,6 +132,14 @@ def get_user_by_email(email: str) -> sqlite3.Row | None:
     return user_row
 
 
+def get_user_by_id(user_id: int) -> sqlite3.Row | None:
+    """Return the user with this id, or None if there is no such user."""
+    connection = get_connection()
+    user_row = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    connection.close()
+    return user_row
+
+
 def has_passkey(user_id: int) -> bool:
     """Return True if the user has registered at least one passkey."""
     connection = get_connection()

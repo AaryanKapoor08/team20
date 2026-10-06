@@ -1,6 +1,7 @@
 """Creates the Flask app and holds all the page routes."""
 
 from flask import Flask, abort, redirect, render_template, request, url_for
+from flask import session as flask_session
 
 from app import client_context
 from app import config
@@ -10,6 +11,7 @@ from app import limits
 from app import passwords
 from app import risk
 from app import sessions
+from app import totp
 
 SESSION_COOKIE = "session_token"
 # Same message for a wrong email and a wrong password, so attackers cannot tell
@@ -17,6 +19,7 @@ SESSION_COOKIE = "session_token"
 LOGIN_ERROR = "Wrong email or password."
 TOO_MANY_ATTEMPTS = "Too many attempts. Try again later."
 UNUSUAL_LOGIN = "This login looks unusual and was blocked. Try again from your usual device."
+WRONG_CODE = "That code is wrong or was already used."
 
 app = Flask(__name__)
 
@@ -87,9 +90,9 @@ def login():
         limits.record_failure(user)
         return refuse_login(context, user["id"], LOGIN_ERROR, 401)
 
-    limits.record_success(user)
     # BASELINE is the "most sites" setup: a right password is enough
     if config.SECURITY_PROFILE != "ADAPTIVE":
+        limits.record_success(user)
         db.record_login_attempt(user["id"], context, True)
         return start_session(user["id"])
     return adaptive_login(user, context)
@@ -108,7 +111,10 @@ def adaptive_login(user, context: dict):
     db.record_login_attempt(user["id"], context, finished, result["level"], result["reasons"])
 
     if step == "login":
+        limits.record_success(user)
         return start_session(user["id"])
+    # The failure count is not cleared yet. Otherwise an attacker with the password could
+    # guess codes, log in again to reset the count, and keep guessing forever.
     if step == "block":
         return render_template("login.html", error=UNUSUAL_LOGIN), 403
     sessions.start_pending(user["id"], step)
@@ -155,12 +161,59 @@ def admin():
     return render_template("admin.html", user=user)
 
 
-@app.route("/verify/totp")
-def verify_totp():
-    """Ask a half logged in user for their authenticator code (placeholder for now)."""
-    if sessions.get_pending_user_id("totp") is None:
+@app.route("/setup/totp", methods=["GET", "POST"])
+def setup_totp():
+    """Let a logged in user add an authenticator app by scanning a QR code."""
+    user = current_user()
+    if user is None:
         return redirect(url_for("login"))
-    return render_template("verify.html", check_name="authenticator code")
+    if user["totp_secret_encrypted"] is not None:
+        return redirect(url_for("home"))
+    if request.method == "GET":
+        # Held in Flask's signed cookie until the user proves their phone has it
+        flask_session["totp_setup_secret"] = totp.new_secret()
+        return show_totp_setup(user, None)
+
+    secret = flask_session.get("totp_setup_secret")
+    if secret is None:
+        return redirect(url_for("setup_totp"))
+    code = request.form.get("code", "").strip()
+    step = totp.matching_step(secret, code)
+    if step is None:
+        return show_totp_setup(user, WRONG_CODE), 400
+    totp.save_secret(user["id"], secret, keys["aes_key"], step)
+    flask_session.pop("totp_setup_secret")
+    return redirect(url_for("home"))
+
+
+def show_totp_setup(user, error: str | None):
+    """Show the QR code page for the secret being set up."""
+    secret = flask_session["totp_setup_secret"]
+    qr_svg = totp.qr_code_svg(secret, user["email"])
+    return render_template("totp_setup.html", qr_svg=qr_svg, secret=secret, error=error)
+
+
+@app.route("/verify/totp", methods=["GET", "POST"])
+def verify_totp():
+    """Ask a half logged in user for the code from their authenticator app."""
+    user_id = sessions.get_pending_user_id("totp")
+    if user_id is None:
+        return redirect(url_for("login"))
+    if request.method == "GET":
+        return render_template("verify_totp.html")
+
+    user = db.get_user_by_id(user_id)
+    # Wrong codes count toward the same lockout as wrong passwords,
+    # so nobody can try all one million codes
+    if limits.is_account_locked(user):
+        sessions.clear_pending()
+        return render_template("login.html", error=TOO_MANY_ATTEMPTS), 429
+    code = request.form.get("code", "").strip()
+    if not totp.verify_code(user, code, keys["aes_key"]):
+        limits.record_failure(user)
+        return render_template("verify_totp.html", error=WRONG_CODE), 401
+    limits.record_success(user)
+    return start_session(user_id)
 
 
 @app.route("/verify/passkey")

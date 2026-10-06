@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Set up authenticator app{% endblock %}
+
+{% block content %}
+<h1>Set up an authenticator app</h1>
+<p>Scan this QR code with an app like Google Authenticator or Microsoft Authenticator.</p>
+
+{# The SVG is made by our own code from the secret, so it is safe to insert as is #}
+<div>{{ qr_svg|safe }}</div>
+
+<p>Can't scan it? Type this key into the app instead: <code>{{ secret }}</code></p>
+
+{% if error %}
+<p role="alert">{{ error }}</p>
+{% endif %}
+
+<form method="post" action="{{ url_for('setup_totp') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p>
+        <label for="code">Enter the 6-digit code the app shows</label><br>
+        <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+               pattern="[0-9]{6}" maxlength="6" required>
+    </p>
+    <button type="submit">Turn on</button>
+</form>
+
+<p><a href="{{ url_for('home') }}">Cancel</a></p>
+{% endblock %}
