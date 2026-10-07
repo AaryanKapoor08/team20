@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import flask
 
+from app import audit_log
 from app import client_context
 from app import config
 from app import db
@@ -78,6 +79,12 @@ def get_user_for_token(token: str, context: dict) -> sqlite3.Row | None:
     if config.SESSION_BINDING and not same_device(session_row, context):
         delete_session(token)
         logger.warning("Session ended: used from another device for user %s", session_row["user_id"])
+        details = {
+            "user_id": session_row["user_id"],
+            "ip": context["ip"],
+            "reason": "used from another device",
+        }
+        audit_log.add_event("session_ended", details)
         return None
     return db.get_user_by_id(session_row["user_id"])
 
@@ -101,6 +108,7 @@ def log_in(user_id: int) -> flask.Response:
     clear_pending()
     context = client_context.get_context(flask.request)
     token = create_session(user_id, context)
+    audit_log.add_event("login_success", {"user_id": user_id, "ip": context["ip"]})
     response = flask.redirect(flask.url_for("home"))
     # HttpOnly: page scripts cannot read the cookie. Lax: other sites' forms do not send it.
     # secure=False because the app runs on plain http://localhost

@@ -2,6 +2,7 @@
 
 from flask import Flask, abort, redirect, render_template, request, url_for
 
+from app import audit_log
 from app import client_context
 from app import config
 from app import csrf
@@ -69,20 +70,20 @@ def login():
 
     # The IP check comes first, so a blocked IP learns nothing about any account
     if limits.is_ip_blocked(context["ip"]):
-        return refuse_login(context, None, TOO_MANY_ATTEMPTS, 429)
+        return refuse_login(context, None, "too many failures from this IP", TOO_MANY_ATTEMPTS, 429)
 
     user = db.get_user_by_email(email)
     if user is None:
         # Do a full password check anyway, so a wrong email is not faster than a wrong password
         passwords.check_password(passwords.DUMMY_HASH, password, keys["pepper"])
-        return refuse_login(context, None, LOGIN_ERROR, 401)
+        return refuse_login(context, None, "unknown email", LOGIN_ERROR, 401)
 
     if limits.is_account_locked(user):
-        return refuse_login(context, user["id"], TOO_MANY_ATTEMPTS, 429)
+        return refuse_login(context, user["id"], "account locked", TOO_MANY_ATTEMPTS, 429)
 
     if not passwords.check_password(user["password_hash"], password, keys["pepper"]):
         limits.record_failure(user)
-        return refuse_login(context, user["id"], LOGIN_ERROR, 401)
+        return refuse_login(context, user["id"], "wrong password", LOGIN_ERROR, 401)
 
     # BASELINE is the "most sites" setup: a right password is enough
     if config.SECURITY_PROFILE != "ADAPTIVE":
@@ -107,19 +108,30 @@ def adaptive_login(user, context: dict):
     if step == "login":
         limits.record_success(user)
         return sessions.log_in(user["id"])
+    details = {
+        "user_id": user["id"],
+        "ip": context["ip"],
+        "risk_level": result["level"],
+        "reasons": result["reasons"],
+    }
     # The failure count is not cleared yet. Otherwise an attacker with the password could
     # guess codes, log in again to reset the count, and keep guessing forever.
     if step == "block":
+        audit_log.add_event("login_blocked", details)
         return render_template("login.html", error=UNUSUAL_LOGIN), 403
+    details["step"] = step
+    audit_log.add_event("step_up_asked", details)
     sessions.start_pending(user["id"], step)
     if step == "totp":
         return redirect(url_for("step_up.verify_totp"))
     return redirect(url_for("step_up.verify_passkey"))
 
 
-def refuse_login(context: dict, user_id, message: str, status_code: int):
+def refuse_login(context: dict, user_id, reason: str, message: str, status_code: int):
     """Save the failed attempt and show the login page again with a message."""
     db.record_login_attempt(user_id, context, False)
+    # The real reason goes only into the log; the user sees the same message either way
+    audit_log.add_event("login_failed", {"user_id": user_id, "ip": context["ip"], "reason": reason})
     return render_template("login.html", error=message), status_code
 
 

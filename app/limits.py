@@ -3,6 +3,7 @@
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+from app import audit_log
 from app import config
 from app import db
 
@@ -44,13 +45,17 @@ def record_failure(user: sqlite3.Row) -> None:
     ).fetchone()[0]
 
     # Start counting from 0 again after a lock, so one typo after it ends does not re-lock
-    if failed_attempts >= config.LOCKOUT_FAILURES:
+    should_lock = failed_attempts >= config.LOCKOUT_FAILURES
+    if should_lock:
         connection.execute(
             "UPDATE users SET failed_attempts = 0, locked_until = ? WHERE id = ?",
             (time_in_minutes(config.LOCKOUT_MINUTES), user["id"]),
         )
     connection.commit()
     connection.close()
+    # Written after commit: the audit log opens its own connection and needs the write lock
+    if should_lock:
+        audit_log.add_event("account_locked", {"user_id": user["id"], "minutes": config.LOCKOUT_MINUTES})
 
 
 def record_success(user: sqlite3.Row) -> None:

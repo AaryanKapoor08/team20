@@ -3,6 +3,7 @@
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask import session as flask_session
 
+from app import audit_log
 from app import client_context
 from app import config
 from app import db
@@ -27,7 +28,15 @@ def finish_step_up(user_id: int, check_name: str):
     # Saved as a success, so the risk check learns this new place and does not ask every time
     context = client_context.get_context(request)
     db.record_login_attempt(user_id, context, True, None, [f"passed {check_name} check"])
+    audit_log.add_event("step_up_passed", {"user_id": user_id, "ip": context["ip"], "check": check_name})
     return sessions.log_in(user_id)
+
+
+def log_step_up_failure(user_id: int, check_name: str, reason: str) -> None:
+    """Save a failed TOTP or passkey check in the audit log (never the code itself)."""
+    context = client_context.get_context(request)
+    details = {"user_id": user_id, "ip": context["ip"], "check": check_name, "reason": reason}
+    audit_log.add_event("step_up_failed", details)
 
 
 @step_up.route("/setup/totp", methods=["GET", "POST"])
@@ -75,10 +84,12 @@ def verify_totp():
     # Wrong codes count toward the same lockout as wrong passwords,
     # so nobody can try all one million codes
     if limits.is_account_locked(user):
+        log_step_up_failure(user_id, "TOTP", "account locked")
         sessions.clear_pending()
         return render_template("login.html", error=TOO_MANY_ATTEMPTS), 429
     code = request.form.get("code", "").strip()
     if not totp.verify_code(user, code, keys["aes_key"]):
+        log_step_up_failure(user_id, "TOTP", "wrong or reused code")
         limits.record_failure(user)
         return render_template("verify_totp.html", error=WRONG_CODE), 401
     return finish_step_up(user_id, "TOTP")
@@ -120,6 +131,7 @@ def verify_passkey():
     challenge = flask_session.pop("passkey_challenge", None)
     credential_json = request.form.get("credential", "")
     if challenge is None or not passkeys.check_login(user_id, credential_json, challenge):
+        log_step_up_failure(user_id, "passkey", "passkey check failed")
         return show_passkey_check(user_id, PASSKEY_FAILED), 401
     return finish_step_up(user_id, "passkey")
 
