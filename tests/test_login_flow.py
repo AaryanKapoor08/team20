@@ -44,6 +44,11 @@ def alice_user_id() -> int:
     return db.get_user_by_email(ALICE_EMAIL)["id"]
 
 
+def lab_headers(lab_client: dict) -> dict:
+    """Return the header that fakes where a request comes from."""
+    return {"X-Lab-Client": json.dumps(lab_client)}
+
+
 def log_in_from(client, lab_client: dict):
     """Log in as Alice, faking where the login comes from with the lab header."""
     client.get("/login")
@@ -96,7 +101,7 @@ def test_baseline_skips_the_risk_check(client, monkeypatch):
 def test_low_risk_goes_straight_in(adaptive):
     """A usual login in ADAPTIVE goes to the home page."""
     response = log_in_from(adaptive, HOME)
-    home_page = adaptive.get("/")
+    home_page = adaptive.get("/", headers=lab_headers(HOME))
 
     assert response.headers["Location"] == "/"
     assert b"alice@example.com" in home_page.data
@@ -294,11 +299,11 @@ def test_setup_with_wrong_code_saves_nothing(client):
 def test_setup_code_cannot_be_used_again_to_log_in(adaptive):
     """The code typed during setup is already spent for the login check."""
     log_in_from(adaptive, HOME)
-    adaptive.get("/setup/totp")
+    adaptive.get("/setup/totp", headers=lab_headers(HOME))
     with adaptive.session_transaction() as flask_session:
         secret = flask_session["totp_setup_secret"]
     code = current_code(secret)
-    send_code(adaptive, "/setup/totp", code)
+    send_code(adaptive, "/setup/totp", code, HOME)
     log_in_from(adaptive, ABROAD)
     response = send_code(adaptive, "/verify/totp", code)
 

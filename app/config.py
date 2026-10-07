@@ -43,6 +43,10 @@ VELOCITY_POINTS = 3
 # How long a half logged in user has to pass the extra check
 PENDING_MINUTES = 5
 
+# A session cookie only works from the browser, OS and network it was made on.
+# On by default; experiment E4 turns it off to show what a stolen cookie can do.
+SESSION_BINDING = True
+
 # Passkeys are tied to the site's address. A browser only signs for this exact
 # origin, so a look-alike phishing site cannot use a passkey made here.
 # Passkeys refuse IP addresses, which is why the app always runs on "localhost".
