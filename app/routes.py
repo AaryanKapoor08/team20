@@ -1,12 +1,14 @@
-"""Creates the Flask app and holds the login, logout, home and admin pages."""
+"""Creates the Flask app and holds the login, logout and home pages."""
 
 from flask import Flask, abort, redirect, render_template, request, url_for
 
+from app import admin_routes
 from app import audit_log
 from app import client_context
 from app import config
 from app import csrf
 from app import db
+from app import firewall
 from app import limits
 from app import passwords
 from app import risk
@@ -30,11 +32,22 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 # Lets every template write {{ csrf_token() }} inside its forms
 app.jinja_env.globals["csrf_token"] = csrf.make_token
-# The TOTP and passkey pages live in their own file
+# The TOTP and passkey pages and the admin pages live in their own files
 app.register_blueprint(step_up_routes.step_up)
+app.register_blueprint(admin_routes.admin)
 
 db.create_tables()
 db.seed_demo_users(keys["pepper"])
+
+
+# Flask runs before_request hooks in the order they are written, so the firewall goes first
+@app.before_request
+def check_firewall():
+    """Refuse every request from a blocked IP, before any page code runs."""
+    ip = client_context.get_context(request)["ip"]
+    if firewall.is_blocked(ip):
+        abort(403)
+    return None
 
 
 @app.before_request
@@ -99,6 +112,10 @@ def adaptive_login(user, context: dict):
     has_totp = user["totp_secret_encrypted"] is not None
     has_passkey = db.has_passkey(user["id"])
     step = risk.choose_step(result["level"], has_totp, has_passkey)
+    # A critical score blocks the whole IP for every page, not just this one login
+    if result["score"] >= config.RISK_BLOCK:
+        firewall.block_ip(context["ip"], f"login risk score {result['score']}")
+        step = "block"
 
     # Only a finished login is saved as a success. Otherwise an attacker with a stolen
     # password, stuck at the extra check, would teach the risk engine their country is normal.
@@ -144,13 +161,3 @@ def logout():
     response.delete_cookie(sessions.SESSION_COOKIE)
     return response
 
-
-@app.route("/admin")
-def admin():
-    """Show the admin page, only to users with the admin role."""
-    user = sessions.current_user()
-    if user is None:
-        return redirect(url_for("login"))
-    if user["role"] != "admin":
-        abort(403)
-    return render_template("admin.html", user=user)

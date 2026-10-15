@@ -28,7 +28,7 @@ LOCKOUT_MINUTES = 15
 # how often real users get asked for an extra check.
 RISK_MEDIUM = 3
 RISK_HIGH = 7
-# So risky that the IP gets blocked (used by the firewall later)
+# So risky that the firewall blocks the IP for every page, not just this login
 RISK_BLOCK = 12
 # Points when a value is new or rare for this user (half if it is common for everyone)
 FEATURE_POINTS = {"ip": 1, "asn": 2, "country": 3, "browser": 2, "os": 1, "device": 1}
@@ -46,6 +46,13 @@ PENDING_MINUTES = 5
 # A session cookie only works from the browser, OS and network it was made on.
 # On by default; experiment E4 turns it off to show what a stolen cookie can do.
 SESSION_BINDING = True
+
+# The admin page only opens from these IPs, even for an admin account.
+# A stolen admin password alone is then not enough: the attacker must also be on this machine.
+ADMIN_ALLOWED_IPS = ["127.0.0.1", "::1"]
+
+# Experiment charts (PNG files) are saved here and shown on the admin page
+RESULTS_DIR = PROJECT_DIR / "results"
 
 # Passkeys are tied to the site's address. A browser only signs for this exact
 # origin, so a look-alike phishing site cannot use a passkey made here.
