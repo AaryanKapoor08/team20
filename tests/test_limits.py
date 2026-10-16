@@ -25,8 +25,8 @@ def set_locked_until(email, locked_until):
     connection.close()
 
 
-def test_sixth_wrong_login_from_one_ip_is_blocked(client):
-    """After 5 failures from one IP, the 6th try is blocked even for a new email."""
+def test_wrong_login_past_the_ip_limit_is_blocked(client):
+    """After IP_FAIL_LIMIT failures from one IP, the next try is blocked even for a new email."""
     for attempt in range(config.IP_FAIL_LIMIT):
         response = log_in_from_ip(client, f"nobody{attempt}@example.com", "wrong", "10.0.0.1")
         assert response.status_code == 401
@@ -45,6 +45,17 @@ def test_blocked_ip_cannot_log_in_with_right_password(client):
     response = log_in_from_ip(client, ALICE_EMAIL, ALICE_PASSWORD, "10.0.0.1")
 
     assert response.status_code == 429
+
+
+def test_shared_ip_with_a_few_typos_is_not_blocked(client):
+    """10 typos from one shared IP (like campus Wi-Fi) do not block a third person there."""
+    for attempt in range(5):
+        log_in_from_ip(client, "bob@example.com", "wrong", "10.0.0.1")
+        log_in_from_ip(client, "carol@example.com", "wrong", "10.0.0.1")
+
+    response = log_in_from_ip(client, ALICE_EMAIL, ALICE_PASSWORD, "10.0.0.1")
+
+    assert response.status_code == 302
 
 
 def test_other_ip_is_not_blocked(client):

@@ -21,7 +21,9 @@ SECURITY_PROFILE = os.environ.get("SECURITY_PROFILE", "ADAPTIVE")
 LAB_MODE = os.environ.get("LAB_MODE") == "1"
 
 # BASELINE numbers. Experiments change these to compare settings.
-IP_FAIL_LIMIT = 5
+# Higher than LOCKOUT_FAILURES on purpose: many people can share one IP (campus Wi-Fi,
+# a home router), so a few typos there must not lock everyone on it out
+IP_FAIL_LIMIT = 20
 IP_WINDOW_MINUTES = 10
 LOCKOUT_FAILURES = 10
 LOCKOUT_MINUTES = 15
@@ -40,7 +42,9 @@ USUAL_SHARE = 0.1
 RISK_WINDOW_MINUTES = 10
 SITE_FAIL_LIMIT = 20
 ACCOUNT_FAIL_LIMIT = 3
-IP_ACCOUNTS_LIMIT = 3
+# 5, not 3: a few people sharing one IP who each mistype once is not credential
+# stuffing. Real stuffing tries hundreds of accounts per IP, so 5 still catches it.
+IP_ACCOUNTS_LIMIT = 5
 VELOCITY_POINTS = 3
 # How long a half logged in user has to pass the extra check
 PENDING_MINUTES = 5

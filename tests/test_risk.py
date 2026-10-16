@@ -26,6 +26,22 @@ def add_logins(user_id, context: dict, success: bool, count: int) -> None:
         db.record_login_attempt(user_id, context, success)
 
 
+def add_users(count: int) -> list:
+    """Add extra users (more than the 4 demo users) and return their ids."""
+    connection = db.get_connection()
+    for number in range(count):
+        connection.execute(
+            "INSERT INTO users (email, password_hash) VALUES (?, ?)",
+            (f"extra{number}@example.com", "not-a-real-hash"),
+        )
+    connection.commit()
+    connection.close()
+    user_ids = []
+    for number in range(count):
+        user_ids.append(user_id_for(f"extra{number}@example.com"))
+    return user_ids
+
+
 def changed(**new_values) -> dict:
     """Return a copy of HOME with some values changed."""
     context = dict(HOME)
@@ -108,12 +124,24 @@ def test_one_ip_failing_on_many_accounts_adds_points(demo_users):
     alice = user_id_for("alice@example.com")
     add_logins(alice, HOME, True, 10)
     stuffer = changed(ip="45.9.9.9")
-    for email in ["bob@example.com", "carol@example.com", "admin@example.com"]:
-        add_logins(user_id_for(email), stuffer, False, 1)
+    for user_id in add_users(config.IP_ACCOUNTS_LIMIT):
+        add_logins(user_id, stuffer, False, 1)
 
     result = risk.score_login(alice, stuffer)
 
-    assert "this IP failed on 3 accounts in the last 10 minutes" in result["reasons"]
+    expected = f"this IP failed on {config.IP_ACCOUNTS_LIMIT} accounts in the last 10 minutes"
+    assert expected in result["reasons"]
+
+
+def test_a_few_typos_on_shared_wifi_are_not_stuffing(demo_users):
+    """Three people on one IP each mistyping once does not look like credential stuffing."""
+    shared_wifi = changed(ip="131.202.1.1")
+    for email in ["bob@example.com", "carol@example.com", "admin@example.com"]:
+        add_logins(user_id_for(email), shared_wifi, False, 1)
+
+    result = risk.score_login(user_id_for("alice@example.com"), shared_wifi)
+
+    assert result["level"] == "low"
 
 
 def test_one_person_logging_in_to_many_accounts_is_fine(demo_users):
