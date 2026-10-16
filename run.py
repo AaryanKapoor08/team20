@@ -1,5 +1,6 @@
 """One command to set up and start the app: python run.py"""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -9,8 +10,10 @@ PROJECT_DIR = Path(__file__).resolve().parent
 VENV_DIR = PROJECT_DIR / ".venv"
 # Written only after the install finishes, so a stopped install is tried again
 INSTALL_MARKER = VENV_DIR / "packages-installed.txt"
-# localhost, not 127.0.0.1: passkeys refuse to work on an IP address
-HOST = "localhost"
+# localhost, not 127.0.0.1: passkeys refuse to work on an IP address.
+# Only the Docker setup sets APP_HOST (to 0.0.0.0) so Nginx in the next container
+# can reach Flask. On a laptop 0.0.0.0 would open the app to the whole network.
+HOST = os.environ.get("APP_HOST", "localhost")
 # 8000, not 5000: recent Macs already use port 5000 for AirPlay
 PORT = 8000
 
