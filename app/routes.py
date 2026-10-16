@@ -1,6 +1,7 @@
 """Creates the Flask app and holds the login, logout and home pages."""
 
 from flask import Flask, abort, redirect, render_template, request, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app import admin_routes
 from app import audit_log
@@ -22,6 +23,11 @@ TOO_MANY_ATTEMPTS = step_up_routes.TOO_MANY_ATTEMPTS
 UNUSUAL_LOGIN = "This login looks unusual and was blocked. Try again from your usual device."
 
 app = Flask(__name__)
+
+# In Docker, every request comes from Nginx. ProxyFix makes request.remote_addr the
+# visitor's IP from Nginx's X-Forwarded-For header (x_for=1: trust one proxy only).
+if config.BEHIND_PROXY:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 
 # Flask signs its own cookie with this key, so nobody can fake one.
 # It comes from keys.json, never from the code.

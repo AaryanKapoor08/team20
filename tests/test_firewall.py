@@ -54,6 +54,20 @@ def test_other_ips_still_get_in(client):
     assert response.status_code == 200
 
 
+def test_proxy_header_is_off_by_default():
+    """Without Docker's BEHIND_PROXY setting, the app does not trust X-Forwarded-For."""
+    assert config.BEHIND_PROXY is False
+
+
+def test_forwarded_for_header_cannot_fake_the_ip(client):
+    """A blocked visitor cannot get in by claiming another IP in X-Forwarded-For."""
+    firewall.block_ip(BAD_IP, "test")
+    headers = {"X-Forwarded-For": OTHER_IP}
+    response = client.get("/login", headers=headers, environ_base={"REMOTE_ADDR": BAD_IP})
+
+    assert response.status_code == 403
+
+
 def test_blocking_an_ip_is_saved_in_the_audit_log(temp_db):
     """block_ip writes an ip_blocked event and the chain still checks out."""
     firewall.block_ip(BAD_IP, "test")

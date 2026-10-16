@@ -1,6 +1,7 @@
 """App settings and loading of the secret keys from keys.json."""
 
 import json
+import os
 import secrets
 from pathlib import Path
 
@@ -50,6 +51,15 @@ SESSION_BINDING = True
 # The admin page only opens from these IPs, even for an admin account.
 # A stolen admin password alone is then not enough: the attacker must also be on this machine.
 ADMIN_ALLOWED_IPS = ["127.0.0.1", "::1"]
+
+# Only docker-compose.yml sets these. Behind Nginx, Flask learns the visitor's IP
+# from Nginx's X-Forwarded-For header. Trusted only when BEHIND_PROXY is on:
+# without Nginx in front, anyone could send that header and pick any IP they like.
+BEHIND_PROXY = os.environ.get("BEHIND_PROXY") == "1"
+# Inside Docker your own laptop shows up as the Docker network's gateway address
+docker_admin_ip = os.environ.get("DOCKER_ADMIN_IP")
+if docker_admin_ip:
+    ADMIN_ALLOWED_IPS.append(docker_admin_ip)
 
 # Experiment charts (PNG files) are saved here and shown on the admin page
 RESULTS_DIR = PROJECT_DIR / "results"
