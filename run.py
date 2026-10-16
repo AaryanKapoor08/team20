@@ -18,6 +18,23 @@ HOST = os.environ.get("APP_HOST", "localhost")
 PORT = 8000
 
 
+USAGE = "Usage: python run.py [--baseline] [--lab]"
+
+
+def read_flags(flags: list) -> None:
+    """Turn the command line flags into settings that the app reads when it starts."""
+    # Environment variables reach the app because run.py starts it as a child process
+    for flag in flags:
+        if flag == "--baseline":
+            os.environ["SECURITY_PROFILE"] = "BASELINE"
+        elif flag == "--lab":
+            os.environ["LAB_MODE"] = "1"
+        else:
+            print(f"Unknown option: {flag}")
+            print(USAGE)
+            sys.exit(1)
+
+
 def check_python_version():
     """Stop with a clear message if Python is older than 3.11."""
     if sys.version_info < (3, 11):
@@ -55,8 +72,13 @@ def install_packages():
 def start_app():
     """Start the Flask app on localhost:8000."""
     # Imported here because Flask only exists inside .venv
+    from app import config
     from app import routes
 
+    print(f"Security profile: {config.SECURITY_PROFILE}")
+    if config.LAB_MODE:
+        # Lab mode trusts a header anyone can send, so make it impossible to miss
+        print("LAB MODE IS ON: any visitor can fake their IP and country. Attack runs only.")
     print(f"Open http://{HOST}:{PORT} in your browser. Press Ctrl+C to stop.")
     # debug stays off: debug mode lets anyone who sees an error page run code
     routes.app.run(host=HOST, port=PORT, debug=False)
@@ -65,6 +87,7 @@ def start_app():
 def main():
     """Set up .venv if needed, then start the app inside it."""
     check_python_version()
+    read_flags(sys.argv[1:])
     if running_inside_venv():
         start_app()
         return

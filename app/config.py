@@ -11,13 +11,14 @@ KEY_NAMES = ["pepper", "aes_key", "flask_secret_key"]
 # The SQLite file; *.db is in .gitignore so it is never committed
 DB_PATH = PROJECT_DIR / "team20.db"
 
-# "BASELINE" is what most sites do: rate limit + lockout only.
-# "ADAPTIVE" also turns on the risk check and extra login steps from Part 2.
-SECURITY_PROFILE = "BASELINE"
+# "ADAPTIVE" (the default) turns on the risk check and extra login steps from Part 2.
+# "BASELINE" is what most sites do: rate limit + lockout only. `python run.py --baseline`
+# picks it; run.py passes the choice on in the SECURITY_PROFILE environment variable.
+SECURITY_PROFILE = os.environ.get("SECURITY_PROFILE", "ADAPTIVE")
 
 # Lab mode lets attack scripts fake their IP, country, ASN and browser with the
-# X-Lab-Client header. Off by default: tests and attack runs turn it on.
-LAB_MODE = False
+# X-Lab-Client header. Off unless started with `python run.py --lab`.
+LAB_MODE = os.environ.get("LAB_MODE") == "1"
 
 # BASELINE numbers. Experiments change these to compare settings.
 IP_FAIL_LIMIT = 5

@@ -11,6 +11,10 @@ from app import routes
 def temp_db(monkeypatch, tmp_path):
     """Point the app at a new database file with all tables made."""
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "test.db")
+    # Every test starts from the same settings, whatever the defaults or the shell say.
+    # Tests that need ADAPTIVE or lab mode switch them on themselves.
+    monkeypatch.setattr(config, "SECURITY_PROFILE", "BASELINE")
+    monkeypatch.setattr(config, "LAB_MODE", False)
     db.create_tables()
 
 
