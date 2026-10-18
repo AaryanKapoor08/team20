@@ -1,0 +1,7 @@
+profile,attacker,got_in,stopped_by
+BASELINE,naive_botnet,no,wrong password (all guesses failed)
+BASELINE,vpn_attacker,yes,none (logged in)
+BASELINE,targeted_attacker,yes,none (logged in)
+ADAPTIVE,naive_botnet,no,wrong password (all guesses failed)
+ADAPTIVE,vpn_attacker,no,risk block: login refused as too risky
+ADAPTIVE,targeted_attacker,yes,none (logged in)
