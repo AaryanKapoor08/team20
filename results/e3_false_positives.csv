@@ -1,0 +1,7 @@
+threshold,total_logins,flagged,false_positive_percent,data_source
+2,6000,1269,21.15,synthetic
+3,6000,278,4.63,synthetic
+4,6000,238,3.97,synthetic
+5,6000,106,1.77,synthetic
+6,6000,106,1.77,synthetic
+7,6000,0,0.0,synthetic
