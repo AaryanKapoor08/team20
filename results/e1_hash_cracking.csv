@@ -1,0 +1,5 @@
+algorithm,hashes_per_second,seconds_for_rockyou,cracked,targets,percent_cracked,crack_budget_seconds
+MD5,1380808.47,10.39,5,8,62.5,1.5
+SHA-256,1191146.64,12.04,5,8,62.5,1.5
+bcrypt,4.89,2936017.25,0,8,0.0,1.5
+Argon2id,15.81,907427.56,0,8,0.0,1.5
