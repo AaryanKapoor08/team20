@@ -1,0 +1,3 @@
+factor,attack,attacker_got_in,outcome
+TOTP code,phishing relay,yes,relayed a live code and got in
+passkey,phishing relay,no,wrong-origin signature refused
