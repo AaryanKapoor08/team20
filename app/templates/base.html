@@ -4,10 +4,17 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Team 20{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
+    <header class="topbar">
+        <span class="brand">Team 20 Secure Login</span>
+        <span class="brand-note">risk-based login demo</span>
+    </header>
     <main>
-        {% block content %}{% endblock %}
+        <div class="card">
+            {% block content %}{% endblock %}
+        </div>
     </main>
 </body>
 </html>

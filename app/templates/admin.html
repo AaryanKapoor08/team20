@@ -8,9 +8,9 @@
 
 <h2>Audit log</h2>
 {% if changed_row is none %}
-<p style="color: green;">Audit log OK: every entry still matches its hash.</p>
+<p class="status-ok">Audit log OK: every entry still matches its hash.</p>
 {% else %}
-<p style="color: red;">Audit log broken: entry {{ changed_row }} was changed or removed.</p>
+<p class="status-bad">Audit log broken: entry {{ changed_row }} was changed or removed.</p>
 {% endif %}
 
 <h2>Blocked IPs</h2>

@@ -126,7 +126,7 @@ The web app lives in `app/`. One file does one job.
 | `app/audit_log.py` | The hash-chained security log and the chain check. |
 | `app/firewall.py` | The IP blocklist and the admin-IP allowlist, inside Flask. |
 | `app/csrf.py` | A CSRF token for every form. |
-| `app/templates/`, `app/static/` | The HTML pages and the local JS files (passkey helper, Chart.js). |
+| `app/templates/`, `app/static/` | The HTML pages, the stylesheet, and the local JS files (passkey helper, Chart.js). |
 | `nginx/` | Optional Nginx firewall config, used only with Docker. |
 
 Security choices worth calling out:
