@@ -7,11 +7,13 @@ E1's real version uses hashcat (a GPU cracking tool) and is the only experiment
 that needs an extra install. If hashcat is not on PATH we skip E1 and keep the E1
 results already committed in results/, so the rest still runs anywhere.
 
-Run from the project root, with nothing else on port 8000 (E2 needs it):
+Run from the project root, with the app NOT running (the experiments start their
+own copy on port 8000):
     python experiments/run_experiments.py
 """
 
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -19,6 +21,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXPERIMENTS_DIR = Path(__file__).resolve().parent
+
+# The experiments start their own copy of the app here, so it has to be free
+SERVER_PORT = 8000
 
 # (label, script file). E1 is handled on its own because it depends on hashcat.
 EXPERIMENTS = [
@@ -29,6 +34,59 @@ EXPERIMENTS = [
     ("E6 log tampering", "e6_log_tampering.py"),
     ("E7 phishing relay", "e7_phishing_relay.py"),
 ]
+
+
+def print_install_help() -> None:
+    """Print the one install command that fixes a missing package."""
+    print("Install the packages from the project root, then run this again:")
+    print("    uv sync")
+    print("  or, without uv:")
+    print(r"    Windows:  .venv\Scripts\python -m pip install -r requirements-dev.txt")
+    print("    Mac:      .venv/bin/python -m pip install -r requirements-dev.txt")
+
+
+def check_packages() -> None:
+    """Stop with one clear message if a needed package is missing, not 7 tracebacks."""
+    try:
+        import flask
+    except ImportError:
+        print("Flask is not installed, so this is not the project's Python.")
+        print()
+        print("Run the experiments with the Python inside the project's .venv folder:")
+        print(r"    Windows:  .venv\Scripts\python experiments\run_experiments.py")
+        print("    Mac:      .venv/bin/python experiments/run_experiments.py")
+        sys.exit(1)
+
+    try:
+        import matplotlib
+    except ImportError:
+        print("matplotlib is not installed, so the charts cannot be drawn.")
+        print()
+        print("It is in the dev package list, which `run.py` does not install")
+        print("(the app itself does not need it).")
+        print()
+        print_install_help()
+        sys.exit(1)
+
+
+def check_port_is_free() -> None:
+    """Stop if something already answers on port 8000, or the results would be wrong."""
+    probe = socket.socket()
+    probe.settimeout(1)
+    # connect_ex returns 0 only when something is already listening there
+    is_busy = probe.connect_ex(("127.0.0.1", SERVER_PORT)) == 0
+    probe.close()
+    if not is_busy:
+        return
+
+    print(f"Something is already using port {SERVER_PORT}, most likely the app.")
+    print()
+    print("Each experiment starts its own copy of the app on that port with a fresh")
+    print("temporary database. If another app is already there, the experiments would")
+    print("quietly measure that one instead and the numbers would be wrong.")
+    print()
+    print("Stop the running app (Ctrl+C in its terminal), then run this again.")
+    sys.exit(1)
 
 
 def run_one(label: str, script: str) -> bool:
@@ -58,6 +116,9 @@ def run_e1_if_possible(results: list) -> None:
 
 def run() -> None:
     """Run E1 (if possible) then E2 to E7, and print a summary of what passed."""
+    check_packages()
+    check_port_is_free()
+
     start = time.perf_counter()
     results = []
 

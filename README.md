@@ -216,16 +216,81 @@ python attacks/vpn_attacker.py
 
 ## The experiments (`experiments/`)
 
-One command runs all seven and redraws every chart into `results/`:
+One command runs all seven experiments and redraws every chart into `results/`. There are three
+steps, and you only ever need step 2 once.
+
+### Step 1: close the app
+
+If the app is running in a terminal window, click that window and press `Ctrl+C` to stop it.
+
+The experiments start their own copy of the app on port 8000, so that port has to be free. If the
+app is still running, the experiments would measure *it* instead, and the results would be wrong.
+
+(`python run.py --lab` from the section above is only for the attacker scripts. The experiments do
+not need it.)
+
+### Step 2: install the chart package (once)
+
+The experiments draw their charts with matplotlib. `run.py` does not install it, because the app
+itself never needs it. From the project folder, run:
 
 ```
-python experiments/run_experiments.py
+uv sync
 ```
 
-Each experiment can also be run on its own (for example `python experiments/e3_false_positives.py`).
-E2–E7 start the app themselves on a fresh temporary database, so they need no running server and
-leave no state behind. E1 is skipped with a message if hashcat is missing, keeping the committed
-Python-based E1 results.
+If you do not have `uv`, use this instead:
+
+```
+Windows:  .venv\Scripts\python -m pip install -r requirements-dev.txt
+Mac:      .venv/bin/python -m pip install -r requirements-dev.txt
+```
+
+### Step 3: run them
+
+```
+Windows:  .venv\Scripts\python experiments\run_experiments.py
+Mac:      .venv/bin/python experiments/run_experiments.py
+```
+
+Use that `.venv` one, not plain `python`. Plain `python` is the computer's own Python, and it does
+not have the project's packages.
+
+### What you should see
+
+It takes about 75 seconds. At the end it prints:
+
+```
+======================================================================
+Summary
+======================================================================
+  E1 hash cracking         skipped (no hashcat)
+  E2 attacker detection    ok
+  E3 false positives       ok
+  E4 stolen session        ok
+  E5 lockout abuse         ok
+  E6 log tampering         ok
+  E7 phishing relay        ok
+
+Done in 74 s. Charts and CSVs are in results/.
+```
+
+`E1 ... skipped (no hashcat)` is normal. hashcat is an optional outside tool that only E1 can use,
+and the E1 results already in `results/` are kept. Everything else should say `ok`.
+
+If a package is missing or port 8000 is busy, the script stops right away and prints exactly what
+to do, so you never get a wall of red text.
+
+### Running one experiment on its own
+
+Same Python, just name the file:
+
+```
+Windows:  .venv\Scripts\python experiments\e3_false_positives.py
+Mac:      .venv/bin/python experiments/e3_false_positives.py
+```
+
+Each of E2 to E7 starts the app itself on a fresh temporary database, so it needs no running
+server and leaves nothing behind.
 
 | # | Question |
 |---|---|
