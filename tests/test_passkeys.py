@@ -83,7 +83,8 @@ def test_adding_a_passkey_saves_its_public_key(adaptive):
 
     assert response.headers["Location"] == "/"
     assert db.has_passkey(db.get_user_by_email(ALICE_EMAIL)["id"])
-    assert b"Passkey: on" in adaptive.get("/", headers=lab_headers(HOME)).data
+    home_page = adaptive.get("/", headers=lab_headers(HOME))
+    assert b'Passkey: <span class="status-ok">on</span>' in home_page.data
 
 
 def test_bad_registration_saves_nothing(adaptive):

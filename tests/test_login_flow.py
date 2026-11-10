@@ -283,7 +283,7 @@ def test_setup_saves_the_secret_after_one_right_code(client):
     assert b"<svg" in page.data
     assert response.headers["Location"] == "/"
     assert db.get_user_by_email(ALICE_EMAIL)["totp_secret_encrypted"] is not None
-    assert b"Authenticator app: on" in client.get("/").data
+    assert b'Authenticator app: <span class="status-ok">on</span>' in client.get("/").data
 
 
 def test_setup_with_wrong_code_saves_nothing(client):

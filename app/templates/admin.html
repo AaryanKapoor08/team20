@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Admin{% endblock %}
+{% block page_width %}wide{% endblock %}
 
 {% block content %}
 <h1>Admin</h1>
@@ -57,7 +58,7 @@
         <td>{{ login["ip"] }}</td>
         <td>{{ login["country"] }}</td>
         <td>{{ login["browser"] }} on {{ login["os"] }}</td>
-        <td>{{ "in" if login["success"] else "refused" }}</td>
+        <td>{{ "logged in" if login["success"] else "refused" }}</td>
         <td>{{ login["risk_level"] or "-" }}</td>
         <td>{{ login["risk_reasons"] or "" }}</td>
     </tr>

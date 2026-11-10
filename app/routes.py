@@ -158,6 +158,27 @@ def refuse_login(context: dict, user_id, reason: str, message: str, status_code:
     return render_template("login.html", error=message), status_code
 
 
+# What each error page says. The wording stays vague on purpose: an attacker
+# should not learn whether a page exists or why they were refused.
+ERROR_MESSAGES = {
+    400: "That form could not be checked. Go back and try again.",
+    403: "You do not have access to this page.",
+    404: "That page does not exist.",
+    429: "Too many attempts. Try again later.",
+}
+
+
+def show_error_page(error):
+    """Show one simple page, in the site's own style, for any error we expect."""
+    message = ERROR_MESSAGES.get(error.code, "Something went wrong.")
+    return render_template("error.html", code=error.code, message=message), error.code
+
+
+# Flask wants one handler registered per code, so the loop saves repeating the line
+for error_code in ERROR_MESSAGES:
+    app.register_error_handler(error_code, show_error_page)
+
+
 @app.route("/logout", methods=["POST"])
 def logout():
     """End the session in the database and remove the cookie."""
