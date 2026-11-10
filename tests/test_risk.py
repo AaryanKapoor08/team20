@@ -152,3 +152,34 @@ def test_one_person_logging_in_to_many_accounts_is_fine(demo_users):
     result = risk.score_login(user_id_for("alice@example.com"), HOME)
 
     assert result["level"] == "low"
+
+
+def add_login_with_missing_details(user_id: int) -> None:
+    """Add an old-style history row whose context columns were never filled in."""
+    connection = db.get_connection()
+    connection.execute(
+        "INSERT INTO login_history (user_id, time, ip, success) VALUES (?, ?, ?, 1)",
+        (user_id, db.utc_now(), "127.0.0.1"),
+    )
+    connection.commit()
+    connection.close()
+
+
+def test_login_history_with_missing_details_does_not_crash(demo_users):
+    """A user whose only past login has empty columns can still be scored."""
+    user_id = user_id_for("alice@example.com")
+    add_login_with_missing_details(user_id)
+
+    result = risk.score_login(user_id, HOME)
+
+    assert isinstance(result["score"], int)
+
+
+def test_missing_details_count_as_not_matching(demo_users):
+    """An empty column is treated as "does not match", so the login looks new."""
+    user_id = user_id_for("alice@example.com")
+    add_login_with_missing_details(user_id)
+
+    result = risk.score_login(user_id, HOME)
+
+    assert result["level"] == "high"

@@ -20,18 +20,29 @@ FEATURE_LABELS = {
     "device": "device type",
 }
 
-# Counts past successful logins, and how many of them match each feature of this login
+# Counts past successful logins, and how many of them match each feature of this login.
+# COALESCE(..., 0) is there because SQL gives back "nothing" instead of a number when a
+# column is empty in every row it looked at. An empty column then counts as "did not
+# match", which makes the login look new rather than crashing the page.
 USER_MATCHES_SQL = """
 SELECT COUNT(*) AS total,
-       SUM(ip = ?) AS ip, SUM(asn = ?) AS asn, SUM(country = ?) AS country,
-       SUM(browser = ?) AS browser, SUM(os = ?) AS os, SUM(device = ?) AS device
+       COALESCE(SUM(ip = ?), 0) AS ip,
+       COALESCE(SUM(asn = ?), 0) AS asn,
+       COALESCE(SUM(country = ?), 0) AS country,
+       COALESCE(SUM(browser = ?), 0) AS browser,
+       COALESCE(SUM(os = ?), 0) AS os,
+       COALESCE(SUM(device = ?), 0) AS device
 FROM login_history
 WHERE success = 1 AND user_id = ?
 """
 ALL_MATCHES_SQL = """
 SELECT COUNT(*) AS total,
-       SUM(ip = ?) AS ip, SUM(asn = ?) AS asn, SUM(country = ?) AS country,
-       SUM(browser = ?) AS browser, SUM(os = ?) AS os, SUM(device = ?) AS device
+       COALESCE(SUM(ip = ?), 0) AS ip,
+       COALESCE(SUM(asn = ?), 0) AS asn,
+       COALESCE(SUM(country = ?), 0) AS country,
+       COALESCE(SUM(browser = ?), 0) AS browser,
+       COALESCE(SUM(os = ?), 0) AS os,
+       COALESCE(SUM(device = ?), 0) AS device
 FROM login_history
 WHERE success = 1
 """
