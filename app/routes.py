@@ -1,4 +1,7 @@
-"""Creates the Flask app and holds the login, logout and home pages."""
+"""Makes the Flask app and holds the login, logout and home pages.
+
+Each route reads the form, calls the other files to do the work, and shows a page.
+"""
 
 from flask import Flask, abort, redirect, render_template, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -16,29 +19,26 @@ from app import risk
 from app import sessions
 from app import step_up_routes
 
-# Same message for a wrong email and a wrong password, so attackers cannot tell
-# which emails have an account
+# same message either way, so nobody can find out which emails exist
 LOGIN_ERROR = "Wrong email or password."
 TOO_MANY_ATTEMPTS = step_up_routes.TOO_MANY_ATTEMPTS
 UNUSUAL_LOGIN = "This login looks unusual and was blocked. Try again from your usual device."
 
 app = Flask(__name__)
 
-# In Docker, every request comes from Nginx. ProxyFix makes request.remote_addr the
-# visitor's IP from Nginx's X-Forwarded-For header (x_for=1: trust one proxy only).
+# in Docker, take the visitor's IP from Nginx, trusting one proxy only
 if config.BEHIND_PROXY:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 
-# Flask signs its own cookie with this key, so nobody can fake one.
-# It comes from keys.json, never from the code.
+# Flask signs its cookie with this key, so nobody can fake one
 keys = config.load_keys()
 app.secret_key = keys["flask_secret_key"]
-# HttpOnly: page scripts cannot read the cookie. Lax: other sites' forms do not send it.
+# HttpOnly: scripts cannot read it. Lax: other sites cannot send it.
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-# Lets every template write {{ csrf_token() }} inside its forms
+# lets every form write {{ csrf_token() }}
 app.jinja_env.globals["csrf_token"] = csrf.make_token
-# The TOTP and passkey pages and the admin pages live in their own files
+# the TOTP, passkey and admin pages live in their own files
 app.register_blueprint(step_up_routes.step_up)
 app.register_blueprint(admin_routes.admin)
 
@@ -46,7 +46,7 @@ db.create_tables()
 db.seed_demo_users(keys["pepper"])
 
 
-# Flask runs before_request hooks in the order they are written, so the firewall goes first
+# written first, so the firewall runs before any page code
 @app.before_request
 def check_firewall():
     """Refuse every request from a blocked IP, before any page code runs."""
@@ -87,13 +87,13 @@ def login():
     password = request.form.get("password", "")
     context = client_context.get_context(request)
 
-    # The IP check comes first, so a blocked IP learns nothing about any account
+    # IP check first, so a blocked IP learns nothing about any account
     if limits.is_ip_blocked(context["ip"]):
         return refuse_login(context, None, "too many failures from this IP", TOO_MANY_ATTEMPTS, 429)
 
     user = db.get_user_by_email(email)
     if user is None:
-        # Do a full password check anyway, so a wrong email is not faster than a wrong password
+        # check a fake hash anyway, so a wrong email is not faster
         passwords.check_password(passwords.DUMMY_HASH, password, keys["pepper"])
         return refuse_login(context, None, "unknown email", LOGIN_ERROR, 401)
 
@@ -104,7 +104,7 @@ def login():
         limits.record_failure(user)
         return refuse_login(context, user["id"], "wrong password", LOGIN_ERROR, 401)
 
-    # BASELINE is the "most sites" setup: a right password is enough
+    # BASELINE is what most sites do: a right password is enough
     if config.SECURITY_PROFILE != "ADAPTIVE":
         limits.record_success(user)
         db.record_login_attempt(user["id"], context, True)
@@ -118,13 +118,12 @@ def adaptive_login(user, context: dict):
     has_totp = user["totp_secret_encrypted"] is not None
     has_passkey = db.has_passkey(user["id"])
     step = risk.choose_step(result["level"], has_totp, has_passkey)
-    # A critical score blocks the whole IP for every page, not just this one login
+    # a very high score blocks the IP on every page, not just this login
     if result["score"] >= config.RISK_BLOCK:
         firewall.block_ip(context["ip"], f"login risk score {result['score']}")
         step = "block"
 
-    # Only a finished login is saved as a success. Otherwise an attacker with a stolen
-    # password, stuck at the extra check, would teach the risk engine their country is normal.
+    # only a finished login counts, so a stuck attacker teaches it nothing
     finished = step == "login"
     db.record_login_attempt(user["id"], context, finished, result["level"], result["reasons"])
 
@@ -137,8 +136,7 @@ def adaptive_login(user, context: dict):
         "risk_level": result["level"],
         "reasons": result["reasons"],
     }
-    # The failure count is not cleared yet. Otherwise an attacker with the password could
-    # guess codes, log in again to reset the count, and keep guessing forever.
+    # the failure count stays, so codes cannot be guessed forever
     if step == "block":
         audit_log.add_event("login_blocked", details)
         return render_template("login.html", error=UNUSUAL_LOGIN), 403
@@ -153,13 +151,12 @@ def adaptive_login(user, context: dict):
 def refuse_login(context: dict, user_id, reason: str, message: str, status_code: int):
     """Save the failed attempt and show the login page again with a message."""
     db.record_login_attempt(user_id, context, False)
-    # The real reason goes only into the log; the user sees the same message either way
+    # the real reason goes to the log only
     audit_log.add_event("login_failed", {"user_id": user_id, "ip": context["ip"], "reason": reason})
     return render_template("login.html", error=message), status_code
 
 
-# What each error page says. The wording stays vague on purpose: an attacker
-# should not learn whether a page exists or why they were refused.
+# vague on purpose: an attacker should not learn why they were refused
 ERROR_MESSAGES = {
     400: "That form could not be checked. Go back and try again.",
     403: "You do not have access to this page.",
@@ -174,7 +171,7 @@ def show_error_page(error):
     return render_template("error.html", code=error.code, message=message), error.code
 
 
-# Flask wants one handler registered per code, so the loop saves repeating the line
+# one handler per code, so a loop saves repeating the line
 for error_code in ERROR_MESSAGES:
     app.register_error_handler(error_code, show_error_page)
 

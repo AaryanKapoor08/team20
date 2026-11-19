@@ -1,4 +1,8 @@
-"""Login sessions: a random token in the browser, only its hash in the database."""
+"""Keeps people logged in.
+
+The browser gets a random token in a cookie and the database keeps only its hash,
+so a leaked database hands nobody a working login.
+"""
 
 import hashlib
 import hmac
@@ -29,28 +33,27 @@ def ip_prefix(ip: str) -> str:
     """Return the network part of an IP: the first three numbers of an IPv4 address."""
     parts = ip.split(".")
     if len(parts) != 4:
-        # Not IPv4 (for example ::1 on localhost), so keep the whole address
+        # not IPv4, so keep the whole address
         return ip
     return ".".join(parts[:3])
 
 
 def context_hash(context: dict) -> str:
     """Return a SHA-256 fingerprint of the browser, OS and network of a request."""
-    # Only the IP prefix is used, so a new address on the same home network still matches.
-    # Known limit: an attacker who copies the browser, OS and network too can still use the cookie.
+    # only the first part of the IP, so a new address at home still matches
     text = f"{context['browser']}|{context['os']}|{ip_prefix(context['ip'])}"
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def create_session(user_id: int, context: dict) -> str:
     """Make a new session for the user and return its token for the cookie."""
-    # secrets gives a token nobody can guess; 32 bytes is far too many to brute force
+    # secrets, not random: nobody can guess this token
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
     created_at = now.strftime(db.TIME_FORMAT)
     expires_at = (now + SESSION_LIFETIME).strftime(db.TIME_FORMAT)
 
-    # Only the hash is saved, so a leaked database gives no working session cookies
+    # only the hash is saved, so a leaked database gives no working cookies
     connection = db.get_connection()
     connection.execute(
         "INSERT INTO sessions (token_hash, user_id, context_hash, created_at, expires_at) "
@@ -75,7 +78,7 @@ def get_user_for_token(token: str, context: dict) -> sqlite3.Row | None:
     if session_row is None:
         return None
 
-    # A cookie copied by malware and used from another machine is ended right away
+    # a cookie used from another machine is thrown away at once
     if config.SESSION_BINDING and not same_device(session_row, context):
         delete_session(token)
         logger.warning("Session ended: used from another device for user %s", session_row["user_id"])
@@ -92,7 +95,7 @@ def get_user_for_token(token: str, context: dict) -> sqlite3.Row | None:
 def same_device(session_row: sqlite3.Row, context: dict) -> bool:
     """Return True if this request comes from the context the session was made on."""
     saved_hash = session_row["context_hash"] or ""
-    # compare_digest takes the same time for any mismatch, so timing reveals nothing
+    # compare_digest: same speed for any wrong value, so timing gives nothing away
     return hmac.compare_digest(saved_hash, context_hash(context))
 
 
@@ -110,8 +113,7 @@ def log_in(user_id: int) -> flask.Response:
     token = create_session(user_id, context)
     audit_log.add_event("login_success", {"user_id": user_id, "ip": context["ip"]})
     response = flask.redirect(flask.url_for("home"))
-    # HttpOnly: page scripts cannot read the cookie. Lax: other sites' forms do not send it.
-    # secure=False because the app runs on plain http://localhost
+    # HttpOnly: scripts cannot read it. Lax: other sites cannot send it.
     max_age = int(SESSION_LIFETIME.total_seconds())
     response.set_cookie(SESSION_COOKIE, token, max_age=max_age, httponly=True, samesite="Lax")
     return response
@@ -127,8 +129,7 @@ def delete_session(token: str) -> None:
 
 def start_pending(user_id: int, step: str) -> None:
     """Remember a login that passed the password but still needs an extra check."""
-    # Kept in Flask's signed cookie, so the browser cannot change the user id or the step.
-    # This is not a session: protected pages only look at the session_token cookie.
+    # kept in Flask's signed cookie, so the browser cannot change it
     expires = datetime.now(timezone.utc) + timedelta(minutes=config.PENDING_MINUTES)
     flask.session["pending_user_id"] = user_id
     flask.session["pending_step"] = step
@@ -137,7 +138,7 @@ def start_pending(user_id: int, step: str) -> None:
 
 def get_pending_user_id(step: str) -> int | None:
     """Return the half logged in user's id, if the marker is for this step and not expired."""
-    # The step must match, so a login sent to the passkey check cannot pick the easier code check
+    # the step must match, so nobody can swap a passkey check for a code
     if flask.session.get("pending_step") != step:
         return None
     if flask.session.get("pending_expires", "") < db.utc_now():

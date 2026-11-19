@@ -1,4 +1,8 @@
-"""Per-IP rate limit and account lockout: the BASELINE defense against guessing."""
+"""Stops password guessing by counting failures.
+
+Too many failures from one IP block that IP for a while, and too many on one
+account lock the account. This is the whole BASELINE defence.
+"""
 
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -36,7 +40,7 @@ def is_account_locked(user: sqlite3.Row) -> bool:
 def record_failure(user: sqlite3.Row) -> None:
     """Count one more wrong password, and lock the account when there are too many."""
     connection = db.get_connection()
-    # Adding 1 inside SQL (not in Python) keeps the count right when logins arrive at once
+    # counted in SQL, so two logins at once cannot lose a count
     connection.execute(
         "UPDATE users SET failed_attempts = failed_attempts + 1 WHERE id = ?", (user["id"],)
     )
@@ -44,7 +48,7 @@ def record_failure(user: sqlite3.Row) -> None:
         "SELECT failed_attempts FROM users WHERE id = ?", (user["id"],)
     ).fetchone()[0]
 
-    # Start counting from 0 again after a lock, so one typo after it ends does not re-lock
+    # back to 0 after a lock, so one typo does not lock it again
     should_lock = failed_attempts >= config.LOCKOUT_FAILURES
     if should_lock:
         connection.execute(
@@ -53,7 +57,7 @@ def record_failure(user: sqlite3.Row) -> None:
         )
     connection.commit()
     connection.close()
-    # Written after commit: the audit log opens its own connection and needs the write lock
+    # after commit, because the log needs the write lock itself
     if should_lock:
         audit_log.add_event("account_locked", {"user_id": user["id"], "minutes": config.LOCKOUT_MINUTES})
 

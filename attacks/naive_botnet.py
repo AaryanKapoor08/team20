@@ -1,16 +1,13 @@
-"""Attacker 1: a naive botnet that sprays leaked passwords from many fake IPs.
+"""Attacker 1: a botnet spraying common leaked passwords.
 
-It knows nothing about the victims. It just tries a short list of common leaked
-passwords against the demo accounts, each guess from a different fake IP and country
-so no single IP trips the per-IP rate limit. This is the attack the app should shrug
-off with password strength alone, because none of these passwords are real.
-
-Run our own app first with: python run.py --lab
+It knows nothing about the victims and tries a short list of common passwords from
+many fake IPs, so no single IP trips the rate limit. Start the app with
+`python run.py --lab` first.
 """
 
 import common
 
-# The demo accounts the botnet knows exist (emails are easy to guess or leak)
+# the demo accounts, since emails are easy to guess
 TARGET_EMAILS = [
     "alice@example.com",
     "bob@example.com",
@@ -18,7 +15,7 @@ TARGET_EMAILS = [
     "admin@example.com",
 ]
 
-# A short list of the kind of passwords that top every leaked-password dump
+# the kind of passwords that top every leaked list
 LEAKED_PASSWORDS = [
     "123456",
     "password",
@@ -27,7 +24,7 @@ LEAKED_PASSWORDS = [
     "welcome",
 ]
 
-# A few fake IPs and countries to spread the guesses across, like a real botnet
+# fake IPs to spread the guesses across, like a real botnet
 FAKE_SOURCES = [
     {"ip": "203.0.113.10", "country": "BR", "asn": "AS1001"},
     {"ip": "198.51.100.22", "country": "RU", "asn": "AS1002"},
@@ -51,7 +48,7 @@ def run() -> None:
 
     for email in TARGET_EMAILS:
         for password in LEAKED_PASSWORDS:
-            # Use the next fake source, so guesses are spread thin across many IPs
+            # next fake IP, so no single one is used much
             source = FAKE_SOURCES[source_number % len(FAKE_SOURCES)]
             source_number += 1
             lab_client = {

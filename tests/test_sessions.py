@@ -94,7 +94,7 @@ def test_cookie_from_another_network_ends_the_session(lab_client):
 
     assert response.headers["Location"] == "/login"
     assert session_count() == 0
-    # The session is gone, so it does not work from the victim's device anymore either
+    # the session is gone, so the victim's own device cannot use it either
     assert open_home(lab_client, VICTIM).headers["Location"] == "/login"
 
 

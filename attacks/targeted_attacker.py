@@ -1,22 +1,14 @@
-"""Attacker 3: a targeted attacker who copies the victim's whole context.
+"""Attacker 3: copies the victim's whole setup.
 
-This attacker did their homework. They know the victim's password and they fake the
-same country, network (ASN), browser, OS and device, so the login looks like the
-victim's own. If the risk check still asks for a TOTP code, they enter a phished code:
-in the lab we read the victim's own secret to stand in for a code the attacker tricked
-the victim into typing on a fake page.
-
-This is the attack that shows a copied context and a phishable code are not enough to
-stop: only a passkey, tied to the real site, resists it.
-
-Run our own app first with: python run.py --lab
+This one knows the password and fakes the same country, network, browser and device,
+so the login looks like the victim's own. If a code is asked for, it uses a phished
+one. Start the app with `python run.py --lab` first.
 """
 
 import sys
 from pathlib import Path
 
-# Running `python attacks/targeted_attacker.py` puts attacks/ on the path, not the
-# project root, so add the root to import the app's own TOTP and database helpers.
+# add the project root, so the app's own files can be imported
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -27,11 +19,11 @@ from app import config
 from app import db
 from app import totp
 
-# The victim and their correct (stolen) password
+# the victim and their stolen password
 VICTIM_EMAIL = "bob@example.com"
 VICTIM_PASSWORD = "bob-demo-pass"
 
-# The victim's usual device, which this attacker copies exactly except for the IP
+# the victim's usual device, copied except for the IP
 VICTIM_CONTEXT = {
     "ip": "24.70.15.5",
     "country": "CA",
@@ -39,7 +31,7 @@ VICTIM_CONTEXT = {
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0 Safari/537.36",
 }
 
-# Same country, ASN, browser, OS and device as the victim; only the IP differs
+# same as the victim everywhere except the IP
 ATTACKER_CONTEXT = {
     "ip": "24.70.99.200",
     "country": "CA",
@@ -73,7 +65,7 @@ def run() -> None:
     """Attack with a copied context, phishing a code if the app asks for one."""
     common.warn_lab_mode()
 
-    # Teach the app the victim's usual device first
+    # let the app learn the victim's usual device first
     common.establish_victim_history(VICTIM_EMAIL, VICTIM_PASSWORD, VICTIM_CONTEXT)
 
     opener = common.make_opener(ATTACKER_CONTEXT)

@@ -1,4 +1,8 @@
-"""Works out where a request comes from: IP, country, ASN, browser, OS and device."""
+"""Works out where a request came from.
+
+It reads the IP and the browser line and returns the country, network, browser,
+system and device type that the risk check compares against.
+"""
 
 import json
 
@@ -7,10 +11,10 @@ from flask import Request, abort
 from app import config
 
 LAB_HEADER = "X-Lab-Client"
-# The app only runs on localhost, so there is no real country or network to look up
+# runs on localhost, so there is no real country to look up
 LOCAL = "local"
 
-# Checked in order: Edge also says "Chrome", and Chrome also says "Safari"
+# order matters: Edge also says Chrome, Chrome also says Safari
 BROWSERS = [
     ("Edg/", "Edge"),
     ("OPR/", "Opera"),
@@ -20,7 +24,7 @@ BROWSERS = [
     ("python", "Python script"),
     ("curl", "curl"),
 ]
-# Checked in order: iPhones also say "Mac OS X", and Android also says "Linux"
+# order matters: iPhones also say Mac OS X, Android also says Linux
 SYSTEMS = [
     ("iPhone", "iOS"),
     ("iPad", "iOS"),
@@ -44,7 +48,7 @@ def find_device(user_agent: str) -> str:
     """Return "Tablet", "Mobile" or "Desktop" from the User-Agent."""
     if "iPad" in user_agent or "Tablet" in user_agent:
         return "Tablet"
-    # Phones say "Mobile" (or "Mobi") in their User-Agent
+    # phones say Mobi in their browser line
     if "Mobi" in user_agent:
         return "Mobile"
     return "Desktop"
@@ -74,8 +78,7 @@ def get_context(request: Request) -> dict:
     asn = LOCAL
     user_agent = request.headers.get("User-Agent", "")
 
-    # The lab header is only read when LAB_MODE is on. If it were trusted in real use,
-    # anyone could fake where they are and walk past the risk check.
+    # read in lab mode only, or anyone could fake where they are
     if config.LAB_MODE and LAB_HEADER in request.headers:
         lab_client = read_lab_header(request.headers[LAB_HEADER])
         ip = lab_client.get("ip", ip)

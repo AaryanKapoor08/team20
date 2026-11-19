@@ -1,4 +1,8 @@
-"""Admin pages: the security dashboard, unblocking IPs and the experiment charts."""
+"""The admin pages.
+
+Shows the security dashboard, lets an admin unblock an IP, and sends the
+experiment chart images.
+"""
 
 from flask import Blueprint, abort, redirect, render_template, request, send_from_directory, url_for
 
@@ -15,8 +19,7 @@ def refuse_non_admin(user) -> None:
     """Stop with 403 unless this user is an admin on an allowed IP."""
     if user is None or user["role"] != "admin":
         abort(403)
-    # Checks where you are, not just who you are: a stolen admin password is not enough.
-    # The real network address is used, never the lab header, so lab mode cannot fake it.
+    # checks where you are too, so a stolen admin password is not enough
     if not firewall.is_admin_ip_allowed(request.remote_addr):
         abort(403)
 
@@ -53,5 +56,5 @@ def unblock():
 def chart(name: str):
     """Send one experiment chart image from results/."""
     refuse_non_admin(sessions.current_user())
-    # send_from_directory refuses names like "../keys.json", so only files in results/ are sent
+    # this refuses names like ../keys.json, so only results/ is sent
     return send_from_directory(config.RESULTS_DIR, name)

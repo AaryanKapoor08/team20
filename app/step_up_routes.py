@@ -1,4 +1,8 @@
-"""Pages for setting up and passing the extra login checks: TOTP codes and passkeys."""
+"""The pages for the extra login checks.
+
+Setting up an authenticator app or a passkey, and passing either one when a login
+looks risky.
+"""
 
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask import session as flask_session
@@ -16,7 +20,7 @@ TOO_MANY_ATTEMPTS = "Too many attempts. Try again later."
 WRONG_CODE = "That code is wrong or was already used."
 PASSKEY_FAILED = "The passkey check failed. Try again."
 
-# A blueprint is a group of routes that routes.py adds to the app
+# a blueprint is a group of pages that routes.py adds to the app
 step_up = Blueprint("step_up", __name__)
 keys = config.load_keys()
 
@@ -25,7 +29,7 @@ def finish_step_up(user_id: int, check_name: str):
     """Log in a user who passed the extra check, and remember where they logged in from."""
     user = db.get_user_by_id(user_id)
     limits.record_success(user)
-    # Saved as a success, so the risk check learns this new place and does not ask every time
+    # saved as a success, so the risk check learns this place
     context = client_context.get_context(request)
     db.record_login_attempt(user_id, context, True, None, [f"passed {check_name} check"])
     audit_log.add_event("step_up_passed", {"user_id": user_id, "ip": context["ip"], "check": check_name})
@@ -48,7 +52,7 @@ def setup_totp():
     if user["totp_secret_encrypted"] is not None:
         return redirect(url_for("home"))
     if request.method == "GET":
-        # Held in Flask's signed cookie until the user proves their phone has it
+        # held in the signed cookie until the phone proves it has it
         flask_session["totp_setup_secret"] = totp.new_secret()
         return show_totp_setup(user, None)
 
@@ -81,8 +85,7 @@ def verify_totp():
         return render_template("verify_totp.html")
 
     user = db.get_user_by_id(user_id)
-    # Wrong codes count toward the same lockout as wrong passwords,
-    # so nobody can try all one million codes
+    # wrong codes count toward the lockout, so all codes cannot be tried
     if limits.is_account_locked(user):
         log_step_up_failure(user_id, "TOTP", "account locked")
         sessions.clear_pending()
@@ -104,7 +107,7 @@ def setup_passkey():
     if request.method == "GET":
         return show_passkey_setup(user, None)
 
-    # The challenge is taken out of the session, so each one can be used only once
+    # taken out of the session, so a challenge works only once
     challenge = flask_session.pop("passkey_challenge", None)
     credential_json = request.form.get("credential", "")
     if challenge is None or not passkeys.save_passkey(user["id"], credential_json, challenge):

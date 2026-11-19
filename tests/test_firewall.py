@@ -92,7 +92,7 @@ def test_critical_risk_login_blocks_the_ip(client, monkeypatch):
     monkeypatch.setattr(config, "LAB_MODE", True)
     give_alice_usual_history()
     headers = {"X-Lab-Client": json.dumps(STRANGER)}
-    # Everything new (10 points) plus 3 recent failures on the account (3 points) = 13
+    # everything new is 10 points, 3 recent failures add 3 more
     for attempt in range(3):
         log_in(client, ALICE["email"], "wrong-password", headers)
     response = log_in(client, ALICE["email"], ALICE["password"], headers)

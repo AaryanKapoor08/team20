@@ -1,4 +1,8 @@
-"""Passkeys (WebAuthn): save a device's public key, then check its signed logins."""
+"""Passkeys, the login that uses your device instead of a password.
+
+It saves the public key of a phone, laptop or security key, then checks what that
+device signs at the next login.
+"""
 
 import sqlite3
 
@@ -31,7 +35,7 @@ def credential_list(user_id: int) -> list:
 
 def registration_options(user: sqlite3.Row) -> tuple[str, str]:
     """Return the options for adding a passkey (as JSON) and their challenge (as text)."""
-    # exclude_credentials stops the same device being added twice
+    # stops the same device being added twice
     options = webauthn.generate_registration_options(
         rp_id=config.PASSKEY_RP_ID,
         rp_name=config.PASSKEY_RP_NAME,
@@ -53,8 +57,7 @@ def save_passkey(user_id: int, credential_json: str, challenge: str) -> bool:
     except WebAuthnException:
         return False
 
-    # Only the public key is saved. The private key never leaves the user's device,
-    # so a stolen database cannot be used to log in.
+    # only the public key is saved, the private one never leaves the device
     connection = db.get_connection()
     try:
         connection.execute(
@@ -64,7 +67,7 @@ def save_passkey(user_id: int, credential_json: str, challenge: str) -> bool:
         )
         connection.commit()
     except sqlite3.IntegrityError:
-        # This passkey is already saved
+        # already saved
         return False
     finally:
         connection.close()
@@ -102,8 +105,7 @@ def check_login(user_id: int, credential_json: str, challenge: str) -> bool:
     except WebAuthnException:
         return False
 
-    # The device counts its logins. py_webauthn rejects a count that went backwards,
-    # which is a sign the passkey was copied.
+    # a login count that went backwards means the passkey was copied
     connection = db.get_connection()
     connection.execute(
         "UPDATE passkeys SET sign_count = ? WHERE credential_id = ?",

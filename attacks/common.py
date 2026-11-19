@@ -1,10 +1,8 @@
-"""Shared helpers for the attack scripts: talk to our own login page over HTTP.
+"""Helpers that every attack script uses to talk to our own login page.
 
-Every attacker sends a fake client context (IP, country, ASN, browser) in the
-X-Lab-Client header. The app only trusts that header when LAB_MODE is on, so start
-the app with `python run.py --lab` before running any of these scripts.
-
-Only ever point these at our own app on localhost.
+Each attacker sends a made-up IP, country and browser in a header, which the app
+only believes in lab mode. Start the app with `python run.py --lab` first, and
+only ever point these scripts at our own app on localhost.
 """
 
 import http.cookiejar
@@ -15,15 +13,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# The app always runs here. The localhost check below refuses any other target.
+# the app always runs here, and any other target is refused
 BASE_URL = "http://localhost:8000"
 
-# Pieces of the app's own messages, so a script can tell what stopped it
+# bits of the app's own messages, so a script knows what stopped it
 UNUSUAL_LOGIN = "This login looks unusual"
 TOO_MANY_ATTEMPTS = "Too many attempts"
 LOGIN_ERROR = "Wrong email or password"
 
-# Pulls the CSRF token out of the hidden field on a form page
+# pulls the CSRF token out of the hidden field on a form
 CSRF_PATTERN = re.compile(r'name="csrf_token" value="([^"]+)"')
 
 
@@ -50,9 +48,9 @@ def make_opener(lab_client: dict) -> urllib.request.OpenerDirector:
         urllib.request.HTTPCookieProcessor(cookie_jar),
         NoRedirect(),
     )
-    # Every request from this opener carries the same fake identity
+    # every request from here carries the same fake identity
     opener.addheaders = [("X-Lab-Client", json.dumps(lab_client))]
-    # Kept so a script can read the session cookie back out of the jar
+    # kept so a script can read the session cookie back out
     opener.cookie_jar = cookie_jar
     return opener
 
@@ -69,7 +67,7 @@ def send(opener, path: str, data: dict = None, extra_headers: dict = None) -> di
         for name, value in extra_headers.items():
             request.add_header(name, value)
 
-    # A 302 or a 4xx comes back as an HTTPError, which carries the same info as a response
+    # a redirect or an error still carries everything we need
     try:
         response = opener.open(request)
         return read_response(response.status, response, response.read())

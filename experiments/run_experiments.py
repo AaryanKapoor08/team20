@@ -1,14 +1,10 @@
-"""Run every experiment (E1 to E7) and redraw all the charts in one command.
+"""Runs every experiment and redraws all the charts in one command.
 
-Each experiment is run as its own process, so one never affects the next: each
-makes its own throwaway database and writes its CSV and chart into results/.
+Each one runs as its own process with its own throwaway database, and writes a CSV
+and a chart into results/. E1 needs hashcat, so it is skipped if hashcat is missing
+and its saved results are kept.
 
-E1's real version uses hashcat (a GPU cracking tool) and is the only experiment
-that needs an extra install. If hashcat is not on PATH we skip E1 and keep the E1
-results already committed in results/, so the rest still runs anywhere.
-
-Run from the project root, with the app NOT running (the experiments start their
-own copy on port 8000):
+Run from the project root, with the app NOT running:
     python experiments/run_experiments.py
 """
 
@@ -22,10 +18,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXPERIMENTS_DIR = Path(__file__).resolve().parent
 
-# The experiments start their own copy of the app here, so it has to be free
+# the experiments start their own app here, so this port must be free
 SERVER_PORT = 8000
 
-# (label, script file). E1 is handled on its own because it depends on hashcat.
+# name and file. E1 is handled on its own because it needs hashcat.
 EXPERIMENTS = [
     ("E2 attacker detection", "e2_attacker_detection.py"),
     ("E3 false positives", "e3_false_positives.py"),
@@ -73,7 +69,7 @@ def check_port_is_free() -> None:
     """Stop if something already answers on port 8000, or the results would be wrong."""
     probe = socket.socket()
     probe.settimeout(1)
-    # connect_ex returns 0 only when something is already listening there
+    # 0 means something is already listening there
     is_busy = probe.connect_ex(("127.0.0.1", SERVER_PORT)) == 0
     probe.close()
     if not is_busy:
@@ -95,7 +91,7 @@ def run_one(label: str, script: str) -> bool:
     print("=" * 70)
     print(f"Running {label}  ({script})")
     print("=" * 70)
-    # sys.executable is this same Python, so the child uses the project's packages
+    # the same Python, so the child has the project's packages
     result = subprocess.run([sys.executable, str(EXPERIMENTS_DIR / script)], cwd=str(PROJECT_ROOT))
     return result.returncode == 0
 
@@ -137,7 +133,7 @@ def run() -> None:
     print()
     print(f"Done in {elapsed:.0f} s. Charts and CSVs are in results/.")
 
-    # A non-zero exit code if anything actually failed, so a script can tell
+    # a non-zero exit code if anything failed
     if any(status == "FAILED" for _, status in results):
         sys.exit(1)
 

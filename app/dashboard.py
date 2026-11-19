@@ -1,4 +1,8 @@
-"""Reads the numbers and lists shown on the admin dashboard."""
+"""Gets the numbers and lists that the admin dashboard shows.
+
+Recent logins, how many were low, medium and high risk, and which experiment
+charts exist.
+"""
 
 from app import config
 from app import db
@@ -9,7 +13,7 @@ RISK_LEVELS = ["low", "medium", "high"]
 def recent_logins(limit: int = 20) -> list:
     """Return the newest login attempts with the account's email, newest first."""
     connection = db.get_connection()
-    # LEFT JOIN keeps attempts on unknown emails; their email comes back as None
+    # LEFT JOIN keeps the tries on emails that do not exist
     rows = connection.execute(
         "SELECT login_history.*, users.email FROM login_history "
         "LEFT JOIN users ON users.id = login_history.user_id "

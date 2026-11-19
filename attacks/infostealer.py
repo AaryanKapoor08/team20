@@ -1,20 +1,17 @@
-"""Attacker 4: infostealer malware that copies a logged-in session cookie.
+"""Attacker 4: malware that copies a logged-in session cookie.
 
-The victim already logged in on their own machine. Malware on that machine copies both
-the password and the live session cookie. The attacker then replays the stolen cookie
-from their own machine, a different network and browser. Session binding should notice
-the cookie is being used from a context it was never issued to, and drop it.
-
-Run our own app first with: python run.py --lab
+The victim logs in on their own machine and malware copies the cookie. The attacker
+then replays that cookie from their own machine, which session binding should spot.
+Start the app with `python run.py --lab` first.
 """
 
 import common
 
-# The victim and their correct (stolen) password
+# the victim and their stolen password
 VICTIM_EMAIL = "carol@example.com"
 VICTIM_PASSWORD = "carol-demo-pass"
 
-# The victim's machine, where the cookie is born
+# the victim's machine, where the cookie is made
 VICTIM_CONTEXT = {
     "ip": "24.70.15.5",
     "country": "CA",
@@ -22,7 +19,7 @@ VICTIM_CONTEXT = {
     "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0 Safari/537.36",
 }
 
-# The attacker's machine, replaying the stolen cookie from somewhere else entirely
+# the attacker's machine, somewhere else entirely
 ATTACKER_CONTEXT = {
     "ip": "185.199.84.7",
     "country": "DE",
@@ -35,7 +32,7 @@ def run() -> None:
     """Log in as the victim, steal the cookie, then replay it from elsewhere."""
     common.warn_lab_mode()
 
-    # Step 1: the victim logs in normally and gets a real session cookie
+    # step 1: the victim logs in and gets a real cookie
     victim = common.make_opener(VICTIM_CONTEXT)
     common.attempt_login(victim, VICTIM_EMAIL, VICTIM_PASSWORD)
     stolen_cookie = common.session_cookie(victim)
@@ -43,7 +40,7 @@ def run() -> None:
         print("infostealer: could not get a session cookie (did the victim login succeed?)")
         return
 
-    # Step 2: the attacker replays that exact cookie from a different machine
+    # step 2: the attacker reuses that cookie from another machine
     attacker = common.make_opener(ATTACKER_CONTEXT)
     if common.logged_in(attacker, cookie=stolen_cookie):
         print("infostealer: GOT IN by replaying the stolen cookie (session binding was off)")

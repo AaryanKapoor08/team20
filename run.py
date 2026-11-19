@@ -1,4 +1,8 @@
-"""One command to set up and start the app: python run.py"""
+"""Sets everything up and starts the app with one command.
+
+It makes the .venv folder, installs the packages the first time, then runs the app
+on localhost port 8000.
+"""
 
 import os
 import shutil
@@ -8,13 +12,11 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent
 VENV_DIR = PROJECT_DIR / ".venv"
-# Written only after the install finishes, so a stopped install is tried again
+# written after the install finishes, so a stopped one is tried again
 INSTALL_MARKER = VENV_DIR / "packages-installed.txt"
-# localhost, not 127.0.0.1: passkeys refuse to work on an IP address.
-# Only the Docker setup sets APP_HOST (to 0.0.0.0) so Nginx in the next container
-# can reach Flask. On a laptop 0.0.0.0 would open the app to the whole network.
+# localhost, not 127.0.0.1: passkeys do not work on an IP address
 HOST = os.environ.get("APP_HOST", "localhost")
-# 8000, not 5000: recent Macs already use port 5000 for AirPlay
+# 8000, not 5000: new Macs already use 5000 for AirPlay
 PORT = 8000
 
 
@@ -23,7 +25,7 @@ USAGE = "Usage: python run.py [--baseline] [--lab]"
 
 def read_flags(flags: list) -> None:
     """Turn the command line flags into settings that the app reads when it starts."""
-    # Environment variables reach the app because run.py starts it as a child process
+    # the app reads these when it starts
     for flag in flags:
         if flag == "--baseline":
             os.environ["SECURITY_PROFILE"] = "BASELINE"
@@ -58,7 +60,7 @@ def install_packages():
     """Make .venv and install the app packages, with uv if it is installed, else pip."""
     print("First run: installing packages, this can take a minute...", flush=True)
     if shutil.which("uv"):
-        # --inexact keeps extra packages (like pytest) that the team installed
+        # --inexact keeps extra packages like pytest
         uv_sync = ["uv", "sync", "--no-dev", "--inexact", "--locked"]
         subprocess.run(uv_sync, cwd=PROJECT_DIR, check=True)
     else:
@@ -71,16 +73,16 @@ def install_packages():
 
 def start_app():
     """Start the Flask app on localhost:8000."""
-    # Imported here because Flask only exists inside .venv
+    # imported here because Flask only exists inside .venv
     from app import config
     from app import routes
 
     print(f"Security profile: {config.SECURITY_PROFILE}")
     if config.LAB_MODE:
-        # Lab mode trusts a header anyone can send, so make it impossible to miss
+        # lab mode trusts a header anyone can send, so say it loudly
         print("LAB MODE IS ON: any visitor can fake their IP and country. Attack runs only.")
     print(f"Open http://{HOST}:{PORT} in your browser. Press Ctrl+C to stop.")
-    # debug stays off: debug mode lets anyone who sees an error page run code
+    # debug off: it would let anyone who sees an error run code
     routes.app.run(host=HOST, port=PORT, debug=False)
 
 
@@ -99,7 +101,7 @@ def main():
             print("Installing packages failed. Check your internet and run this again.")
             sys.exit(1)
 
-    # Run this same file again, but with the .venv Python
+    # run this same file again with the .venv Python
     try:
         result = subprocess.run([str(venv_python()), str(Path(__file__).resolve())])
     except KeyboardInterrupt:

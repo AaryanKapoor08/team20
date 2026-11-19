@@ -1,10 +1,7 @@
-"""Start and stop the app for an experiment, with a fresh throwaway database.
+"""Starts and stops the app for the experiments that need a real server.
 
-`running(profile)` is a context manager: it launches the app in its own process
-on a new empty database, waits until the login page answers, and shuts it down
-again afterwards. Experiments use it so each run starts from a clean state.
-
-This is a test harness, only ever pointed at our own app on localhost.
+It launches _serve.py in its own process, waits for the port to answer, and shuts it
+down again afterwards.
 """
 
 import contextlib
@@ -21,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SERVE_SCRIPT = Path(__file__).resolve().parent / "_serve.py"
 BASE_URL = "http://localhost:8000"
 
-# How long to wait for the server to come up before giving up
+# how long to wait for the server before giving up
 START_TIMEOUT_SECONDS = 20
 
 
@@ -34,7 +31,7 @@ def wait_until_up() -> None:
                 if response.status == 200:
                     return
         except (urllib.error.URLError, ConnectionError):
-            # Not listening yet; wait a moment and try again
+            # not up yet, wait and try again
             time.sleep(0.3)
     raise RuntimeError("The experiment server did not start in time.")
 
@@ -50,7 +47,7 @@ def running(profile: str):
     environment["SECURITY_PROFILE"] = profile
     environment["LAB_MODE"] = "1"
 
-    # Quiet: the dev server's request logs would drown out the experiment output
+    # quiet, or the server logs would bury the experiment output
     process = subprocess.Popen(
         [sys.executable, str(SERVE_SCRIPT)],
         cwd=str(PROJECT_ROOT),

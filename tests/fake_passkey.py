@@ -59,7 +59,7 @@ def register(device: dict, options_json: str, origin: str = ORIGIN) -> str:
     client_data = make_client_data("webauthn.create", options["challenge"], origin)
 
     credential_id = device["credential_id"]
-    # 16 zero bytes say "unknown device model", then the id's length, the id and the public key
+    # unknown device model, then the id length, the id and the public key
     id_length = len(credential_id).to_bytes(2, "big")
     credential_data = bytes(16) + id_length + credential_id + cose_public_key(device)
     flags = USER_PRESENT | USER_VERIFIED | HAS_CREDENTIAL_DATA
@@ -87,7 +87,7 @@ def sign_in(device: dict, options_json: str, origin: str = ORIGIN) -> str:
     device["sign_count"] = device["sign_count"] + 1
     auth_data = make_authenticator_data(device, USER_PRESENT | USER_VERIFIED)
 
-    # The device signs its own data plus a hash of the browser's data (which holds the origin)
+    # the device signs its own data plus a hash of the browser's data
     signed_bytes = auth_data + hashlib.sha256(client_data).digest()
     signature = device["private_key"].sign(signed_bytes, ec.ECDSA(hashes.SHA256()))
 

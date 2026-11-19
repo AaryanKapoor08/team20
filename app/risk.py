@@ -1,7 +1,7 @@
-"""Login risk: a score, a level (low, medium, high) and plain-English reasons.
+"""Decides how risky a login looks.
 
-A simple version of Freeman et al. (2016): a login that does not look like this
-user's past logins is risky, unless that value is common for everyone.
+It compares this login with the user's past ones and gives it a score, a level of
+low, medium or high, and a list of reasons in plain words.
 """
 
 import sqlite3
@@ -20,10 +20,7 @@ FEATURE_LABELS = {
     "device": "device type",
 }
 
-# Counts past successful logins, and how many of them match each feature of this login.
-# COALESCE(..., 0) is there because SQL gives back "nothing" instead of a number when a
-# column is empty in every row it looked at. An empty column then counts as "did not
-# match", which makes the login look new rather than crashing the page.
+# counts past good logins and how many of them match this one
 USER_MATCHES_SQL = """
 SELECT COUNT(*) AS total,
        COALESCE(SUM(ip = ?), 0) AS ip,
@@ -71,7 +68,7 @@ def feature_risk(feature: str, user_counts: sqlite3.Row, all_counts: sqlite3.Row
         return 0
 
     points = config.FEATURE_POINTS[feature]
-    # A value common for everyone (like Chrome) is less suspicious than one nobody uses
+    # something everyone uses, like Chrome, is less suspicious
     all_share = all_counts[feature] / all_counts["total"]
     if all_share >= config.USUAL_SHARE:
         points = points // 2
@@ -116,8 +113,7 @@ def velocity_risk(user_id: int, ip: str) -> tuple[int, list]:
         points += config.VELOCITY_POINTS
         reasons.append(f"{account_fails} failed logins on this account in the last {minutes} minutes")
 
-    # Credential stuffing: one IP failing on many different accounts.
-    # Only failures count, so one person logging in to a few demo accounts is fine.
+    # one IP failing on many accounts looks like a stuffing attack
     ip_accounts = count_recent(
         "SELECT COUNT(DISTINCT user_id) FROM login_history "
         "WHERE success = 0 AND ip = ? AND time >= ?",
@@ -143,7 +139,7 @@ def choose_step(level: str, has_totp: bool, has_passkey: bool) -> str:
     """Pick what happens next: "login", "totp", "passkey" or "block"."""
     if level == "low":
         return "login"
-    # A medium login with no authenticator app has no code to ask for, so it is treated as high
+    # medium with no app set up has no code to ask for, so treat it as high
     if level == "medium" and has_totp:
         return "totp"
     if has_passkey:
@@ -158,7 +154,7 @@ def score_login(user_id: int, context: dict) -> dict:
 
     user_counts = count_matches(context, user_id)
     if user_counts["total"] == 0:
-        # Nothing to compare with yet, so only velocity counts
+        # nothing to compare with yet
         reasons.append("no login history yet")
     else:
         all_counts = count_matches(context)

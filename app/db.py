@@ -1,4 +1,8 @@
-"""Database connection and table setup, using Python's built-in sqlite3."""
+"""Opens the database and makes the tables.
+
+It uses the sqlite3 module that comes with Python, makes the tables on the first
+run, and adds the four demo accounts.
+"""
 
 import sqlite3
 from datetime import datetime, timezone
@@ -6,8 +10,7 @@ from datetime import datetime, timezone
 from app import config
 from app import passwords
 
-# Demo accounts for trying the app. These passwords are public (listed in the README),
-# so they are only for local testing.
+# demo accounts, public passwords, for local testing only
 DEMO_USERS = [
     ("admin@example.com", "admin-demo-pass", "admin"),
     ("alice@example.com", "alice-demo-pass", "user"),
@@ -15,12 +18,10 @@ DEMO_USERS = [
     ("carol@example.com", "carol-demo-pass", "user"),
 ]
 
-# Every time is stored as UTC text like 2026-10-04T12:00:00.
-# Text in this format sorts and compares in the right order.
+# times are UTC text like 2026-10-04T12:00:00, which sorts correctly
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
-# IF NOT EXISTS makes this safe to run on every start.
-# Columns used by later phases are made now, so nobody has to rebuild the database.
+# safe to run on every start, and later columns are made now
 TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
@@ -85,10 +86,10 @@ CREATE TABLE IF NOT EXISTS blocked_ips (
 
 def get_connection() -> sqlite3.Connection:
     """Open the database so rows can be read by column name, like row["email"]."""
-    # config.DB_PATH is read on every call, so tests can point it at a temp file
+    # read every time, so tests can point it at their own file
     connection = sqlite3.connect(config.DB_PATH)
     connection.row_factory = sqlite3.Row
-    # SQLite skips REFERENCES checks unless this is turned on for each connection
+    # SQLite only checks the links between tables if this is on
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
 

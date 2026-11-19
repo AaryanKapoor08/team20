@@ -1,4 +1,8 @@
-"""IP blocklist and admin IP allowlist, so Flask can act as its own firewall."""
+"""The small firewall built into the app.
+
+It keeps a list of blocked IPs that are refused on every page, and a list of IPs
+that are allowed to open the admin page.
+"""
 
 from app import audit_log
 from app import config
@@ -15,12 +19,11 @@ def is_blocked(ip: str) -> bool:
 
 def block_ip(ip: str, reason: str) -> bool:
     """Add this IP to the blocklist. Returns False if the IP may never be blocked."""
-    # Like fail2ban's "ignoreip": the admin's own IPs are never blocked, otherwise
-    # an attacker could get the admin locked out of the page that unblocks IPs
+    # the admin's own IPs are never blocked, or nobody could unblock anything
     if is_admin_ip_allowed(ip):
         return False
     connection = db.get_connection()
-    # OR IGNORE: blocking an IP that is already blocked keeps the first row and reason
+    # blocking an IP twice keeps the first reason
     connection.execute(
         "INSERT OR IGNORE INTO blocked_ips (ip, reason, time) VALUES (?, ?, ?)",
         (ip, reason, db.utc_now()),

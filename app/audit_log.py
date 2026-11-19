@@ -1,28 +1,31 @@
-"""Hash chained audit log: every security event is saved so that any later edit can be found."""
+"""Keeps the log of security events.
+
+Every row holds the hash of the row before it, so changing or deleting one later
+shows up when the chain is checked.
+"""
 
 import hashlib
 import json
 
 from app import db
 
-# The first row has no row before it, so it links to 64 zeros instead
+# the first row has nothing before it, so it links to zeros
 FIRST_PREV_HASH = "0" * 64
 
 
 def compute_hash(prev_hash: str, row: dict) -> str:
     """Return the SHA-256 of the previous row's hash plus this row as JSON."""
-    # sort_keys gives the same text for the same row every time, so the hash can be rebuilt
+    # the same row always gives the same text, so the hash can be redone
     row_text = json.dumps(row, sort_keys=True)
     return hashlib.sha256((prev_hash + row_text).encode("utf-8")).hexdigest()
 
 
 def add_event(event: str, details: dict) -> None:
     """Save one security event at the end of the chain."""
-    # Never put passwords, codes, emails or session tokens in details
+    # never put passwords, codes or tokens in details
     row = {"time": db.utc_now(), "event": event, "details": json.dumps(details, sort_keys=True)}
     connection = db.get_connection()
-    # IMMEDIATE locks the database for writing now, so two requests at once
-    # cannot both read the same last hash and split the chain in two
+    # locks the database now, so two requests cannot split the chain
     connection.execute("BEGIN IMMEDIATE")
     last_row = connection.execute(
         "SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1"
@@ -44,9 +47,7 @@ def verify_chain() -> int | None:
     rows = connection.execute("SELECT * FROM audit_log ORDER BY id").fetchall()
     connection.close()
 
-    # Each row must point at the row before it and its own hash must still match its content.
-    # A changed row breaks its own hash; a deleted row breaks the link of the row after it.
-    # Known limit: deleting the newest rows leaves a shorter chain that still checks out.
+    # each row must point at the one before it and match its own hash
     prev_hash = FIRST_PREV_HASH
     for saved_row in rows:
         row = {"time": saved_row["time"], "event": saved_row["event"], "details": saved_row["details"]}
