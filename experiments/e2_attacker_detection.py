@@ -1,11 +1,8 @@
-"""E2: which attackers get in under BASELINE, and which the adaptive defense stops.
+"""E2: which attackers get in, with and without the risk check.
 
-We run the first three attack scripts against our own app twice: once with
-SECURITY_PROFILE=BASELINE (rate limit and lockout only, like most sites) and once
-with ADAPTIVE (the risk check and step-up from Part 2). For each run we record
-whether the attacker got in and, if not, which layer stopped them.
-
-Each attacker runs against a fresh, empty database so one run never affects the next.
+The first three attack scripts are run against our own app twice, once in BASELINE
+and once in ADAPTIVE, and we record who got in and what stopped the rest. Every run
+gets a fresh database.
 
 Run from the project root, with nothing else on port 8000:
     python experiments/e2_attacker_detection.py
@@ -20,7 +17,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ATTACKS_DIR = PROJECT_ROOT / "attacks"
-# The attack scripts do `import common`, so attacks/ must be on the path
+# the attack scripts import common, so attacks/ must be on the path
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(ATTACKS_DIR))
 
@@ -29,6 +26,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from experiments import chart_style
+
 from experiments import lab_server
 
 RESULTS_DIR = PROJECT_ROOT / "results"
@@ -36,8 +35,7 @@ CSV_PATH = RESULTS_DIR / "e2_attacker_detection.csv"
 CHART_PATH = RESULTS_DIR / "e2_attacker_detection.png"
 
 PROFILES = ["BASELINE", "ADAPTIVE"]
-# Attackers 1 to 3 (the credential attackers). The cookie and lockout attackers
-# belong to E4 and E5, where session binding and lockout are the point.
+# the password attackers. The cookie and lockout ones belong to E4 and E5.
 ATTACKERS = ["naive_botnet", "vpn_attacker", "targeted_attacker"]
 
 
@@ -78,7 +76,7 @@ def collect_rows() -> list:
     for profile in PROFILES:
         for name in ATTACKERS:
             print(f"  {profile}: running {name} ...")
-            # A fresh server and empty database for every single run
+            # a fresh server and empty database every run
             with lab_server.running(profile):
                 output = run_attacker(name)
             got_in, defense = classify(name, output)
@@ -102,23 +100,20 @@ def write_csv(rows: list) -> None:
 
 def draw_chart(rows: list) -> None:
     """Draw a grid: red cell if the attacker got in, green if a layer stopped it."""
-    # Look up each result by (profile, attacker) so we can place it in the grid
+    # look each result up by profile and attacker, to place it in the grid
     by_cell = {}
     for row in rows:
         by_cell[(row["profile"], row["attacker"])] = row
 
+    chart_style.use_plain_style()
     figure, axes = plt.subplots(figsize=(9, 3.6))
     for column, profile in enumerate(PROFILES):
         for grid_row, attacker in enumerate(ATTACKERS):
             row = by_cell[(profile, attacker)]
             got_in = row["got_in"] == "yes"
-            color = "#e74c3c" if got_in else "#27ae60"
-            axes.add_patch(plt.Rectangle((column, grid_row), 1, 1, facecolor=color, edgecolor="white"))
             label = "GOT IN" if got_in else row["stopped_by"]
-            axes.text(
-                column + 0.5, grid_row + 0.5, label,
-                ha="center", va="center", color="white", fontsize=8, wrap=True,
-            )
+            fill = "dark" if got_in else "light"
+            chart_style.draw_cell(axes, column, grid_row, label, fill)
 
     axes.set_xlim(0, len(PROFILES))
     axes.set_ylim(0, len(ATTACKERS))
@@ -127,7 +122,8 @@ def draw_chart(rows: list) -> None:
     axes.set_yticks([r + 0.5 for r in range(len(ATTACKERS))])
     axes.set_yticklabels(ATTACKERS)
     axes.invert_yaxis()
-    axes.set_title("E2: red = attacker got in, green = stopped (and by what)")
+    chart_style.hide_axis_lines(axes)
+    axes.set_title("E2: black = attacker got in, white = stopped (and by what)")
     figure.tight_layout()
     figure.savefig(CHART_PATH, dpi=120)
     plt.close(figure)

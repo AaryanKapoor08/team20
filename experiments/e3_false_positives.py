@@ -1,18 +1,8 @@
-"""E3: how often does the risk check bother a real, honest user?
+"""E3: how often does the risk check bother an honest user?
 
-A risk check that flags attackers is only useful if it mostly leaves real users
-alone. A "false positive" here is an honest login that the engine scores high
-enough to demand an extra check. We replay many normal logins through the real
-risk engine (app/risk.py) and count the false-positive rate at several score
-thresholds, so we can see the trade-off: a lower threshold catches more attackers
-but nags more real users.
-
-The experiment uses a generated population of ordinary users. Each has a usual
-device and network and logs in mostly from there, with the occasional honest
-change: a new phone, a browser update, or a trip abroad. The public RBA dataset
-(Wiefling et al., das-group/rba-dataset, CC BY 4.0) is about 15 GB and is not
-committed; this synthetic population models the same question and runs anywhere.
-If a file `data/rba_sample.csv` is present it is used instead (see load_rows).
+Thousands of ordinary logins are replayed through the real risk engine, and we count
+how many would be asked for an extra check at several score thresholds. The lower the
+threshold, the more attackers are caught and the more real users are nagged.
 
 Run from the project root:  python experiments/e3_false_positives.py
 """
@@ -30,6 +20,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from experiments import chart_style
+
 from app import config
 from app import db
 from app import risk
@@ -39,24 +31,24 @@ DATA_DIR = PROJECT_ROOT / "data"
 CSV_PATH = RESULTS_DIR / "e3_false_positives.csv"
 CHART_PATH = RESULTS_DIR / "e3_false_positives.png"
 
-# A fixed seed so the generated population, and the result, are the same every run
+# a fixed seed, so every run gives the same people and the same result
 SEED = 20
-# Size of the experiment. Printed into the setup notes as the sample size.
+# how big the experiment is
 USERS = 1000
 HISTORY_PER_USER = 12
 TEST_LOGINS_PER_USER = 6
 BACKGROUND_LOGINS = 1000
-# Score thresholds to test. The app's RISK_MEDIUM (3) is the one it uses today.
+# the thresholds to try. The app uses RISK_MEDIUM today.
 THRESHOLDS = [2, 3, 4, 5, 6, 7]
 
-# Common values, so the engine learns what "normal for everyone" looks like
+# common values, so the engine learns what normal looks like
 COUNTRIES = ["US", "US", "US", "CA", "GB", "DE", "FR", "AU"]
 BROWSERS = ["Chrome", "Chrome", "Chrome", "Safari", "Firefox", "Edge"]
 OPERATING_SYSTEMS = ["Windows", "Windows", "macOS", "Android", "iOS"]
 DEVICES = ["Desktop", "Desktop", "Mobile", "Tablet"]
 ASNS = [f"AS{1000 + n}" for n in range(12)]
 
-# A few rarer countries an honest user might travel to
+# rarer countries an honest user might travel to
 RARE_COUNTRIES = ["JP", "BR", "ZA", "IN", "NO"]
 
 
@@ -83,21 +75,21 @@ def honest_variation(home: dict, rng: random.Random) -> dict:
     context = dict(home)
     roll = rng.random()
     if roll < 0.70:
-        # Same place as always, maybe a new IP from the same provider (DHCP)
+        # same place as always, maybe a new IP from the same provider
         if rng.random() < 0.5:
             context["ip"] = random_ip(rng)
     elif roll < 0.85:
-        # A browser update or a second browser on the same machine
+        # a browser update, or a second browser on the same machine
         context["browser"] = rng.choice(BROWSERS)
         context["ip"] = random_ip(rng)
     elif roll < 0.95:
-        # Logging in from their phone instead of their computer
+        # logging in from their phone instead
         context["device"] = "Mobile"
         context["os"] = rng.choice(["Android", "iOS"])
         context["browser"] = rng.choice(["Chrome", "Safari"])
         context["ip"] = random_ip(rng)
     else:
-        # A genuine trip abroad
+        # a real trip abroad
         context["country"] = rng.choice(COUNTRIES + RARE_COUNTRIES)
         context["ip"] = random_ip(rng)
         context["asn"] = rng.choice(ASNS)
@@ -106,7 +98,7 @@ def honest_variation(home: dict, rng: random.Random) -> dict:
 
 def insert_logins(connection, user_id: int, contexts: list) -> None:
     """Insert one user and all of their successful logins in a single transaction."""
-    # A bare user row keeps the login_history foreign key happy; the password is unused
+    # a bare user row, because login_history points at one
     connection.execute(
         "INSERT OR IGNORE INTO users (id, email, password_hash) VALUES (?, ?, ?)",
         (user_id, f"sim{user_id}@example.com", "not-a-real-hash"),
@@ -199,15 +191,17 @@ def draw_chart(rows: list) -> None:
     thresholds = [row["threshold"] for row in rows]
     percents = [row["false_positive_percent"] for row in rows]
 
+    chart_style.use_plain_style()
     figure, axes = plt.subplots(figsize=(8, 4.5))
-    axes.plot(thresholds, percents, marker="o", color="#8e44ad")
+    axes.plot(thresholds, percents, marker="o", color=chart_style.INK, linewidth=2, markersize=5)
     axes.set_xlabel("score needed before an extra check is asked")
     axes.set_ylabel("honest logins asked for an extra check (%)")
     axes.set_title("E3: false positives vs the risk threshold")
-    # Mark the threshold the app actually uses today
-    axes.axvline(config.RISK_MEDIUM, color="#7f8c8d", linestyle="--")
-    axes.text(config.RISK_MEDIUM + 0.05, max(percents), " app's RISK_MEDIUM", color="#7f8c8d", va="top")
-    axes.grid(True, alpha=0.3)
+    # mark the threshold the app uses today
+    axes.axvline(config.RISK_MEDIUM, color=chart_style.MID, linestyle="--")
+    axes.text(config.RISK_MEDIUM + 0.05, max(percents), " app's RISK_MEDIUM", color=chart_style.MID, va="top")
+    axes.grid(True, linewidth=0.8)
+    axes.set_axisbelow(True)
     figure.tight_layout()
     figure.savefig(CHART_PATH, dpi=120)
     plt.close(figure)
@@ -217,7 +211,7 @@ def run() -> None:
     """Run the whole experiment against a fresh temporary database."""
     print(f"E3: replaying {USERS * TEST_LOGINS_PER_USER} honest logins through the risk engine")
 
-    # Keep the whole experiment in its own database, never the real app's
+    # its own database, never the real one
     temp_db = RESULTS_DIR / "_e3_temp.db"
     if temp_db.exists():
         temp_db.unlink()

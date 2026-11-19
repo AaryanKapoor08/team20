@@ -9,14 +9,14 @@
 </head>
 <body>
     <header class="topbar">
+        <span class="brand-mark">20</span>
         <span class="brand">Team 20 Secure Login</span>
         <span class="brand-note">risk-based login demo</span>
     </header>
-    {# Most pages are a narrow column. The admin page sets "wide" for its tables. #}
+    {# Most pages are a narrow column. The admin page sets "wide" for its tables.
+       Each page draws its own cards, so a page can have more than one. #}
     <main class="{% block page_width %}narrow{% endblock %}">
-        <div class="card">
-            {% block content %}{% endblock %}
-        </div>
+        {% block content %}{% endblock %}
     </main>
 </body>
 </html>

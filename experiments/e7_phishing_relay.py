@@ -1,18 +1,8 @@
-"""E7: a TOTP code can be phished, but a passkey only works on the real site.
+"""E7: a phished code works, a passkey does not.
 
-Both a TOTP code and a passkey are "something you have". The difference is what
-they are tied to. A TOTP code is just six digits, so an attacker who tricks the
-victim into reading one out can relay it and log in. A passkey signs the exact web
-address it is used on, so a signature made on a look-alike phishing site does not
-match the real site and is rejected.
-
-Two parts, each on its own throwaway database, driving the real app in-process:
-
-1. Phishing relay vs TOTP: a login from an unusual place is asked for a code. The
-   attacker relays a live code (in the lab, read from the victim's secret) and gets in.
-2. Phishing relay vs passkey: a high-risk login is asked for a passkey. The victim's
-   device signs the challenge for a phishing origin (our fake device, tests/fake_passkey),
-   and the real server refuses it.
+A code read out to a fake site is relayed to the real one straight away, and then the
+same thing is tried with a passkey. The passkey is tied to the real address, so what
+the fake site gets is useless.
 
 Run from the project root:  python experiments/e7_phishing_relay.py
 """
@@ -27,13 +17,15 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-# tests/fake_passkey.py is our stand-in passkey device, also used by the test suite
+# our stand-in passkey device, also used by the tests
 sys.path.insert(0, str(PROJECT_ROOT / "tests"))
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+from experiments import chart_style
 import pyotp
 
 from app import client_context
@@ -56,14 +48,14 @@ CHROME_WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0 Safari/
 FIREFOX_WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0"
 FIREFOX_ANDROID = "Mozilla/5.0 (Android 14; Mobile; rv:130.0) Gecko/130.0 Firefox/130.0"
 
-# The victim's usual device, built once and reused as their login history
+# the victim's usual device, reused as their history
 HOME = {"ip": "24.70.15.5", "country": "CA", "asn": "AS852-Telus", "user_agent": CHROME_WINDOWS}
-# Same country and OS, different network and browser: unusual enough to ask for a code (medium)
+# different enough to be asked for a code
 TOTP_ATTACK = {"ip": "24.70.99.9", "country": "CA", "asn": "AS9999-VPN", "user_agent": FIREFOX_WINDOWS}
-# Everything different: risky enough to ask for a passkey (high)
+# everything different, so a passkey is asked for
 PASSKEY_ATTACK = {"ip": "45.9.9.9", "country": "RU", "asn": "AS9009", "user_agent": FIREFOX_ANDROID}
 
-# A look-alike site the victim's browser was tricked into signing for
+# the fake site the browser was tricked into signing for
 PHISHING_ORIGIN = "http://localhost-login.example"
 
 TOTP_VICTIM = "bob@example.com"
@@ -124,7 +116,7 @@ def run_totp_part() -> dict:
     """Show a phished TOTP code let the attacker finish an unusual login."""
     fresh_database()
     user_id = give_history(TOTP_VICTIM)
-    # The victim has an authenticator app; store its secret so we can relay a live code
+    # the victim has an app, so a live code can be relayed
     secret = totp.new_secret()
     connection = db.get_connection()
     connection.execute(
@@ -140,7 +132,7 @@ def run_totp_part() -> dict:
     if not asked_for_code:
         return totp_row("no code asked (login was not treated as risky)", False)
 
-    # The phished code: the attacker tricked the victim into reading out a live code
+    # the code the victim was tricked into reading out
     attacker.get("/verify/totp", headers=lab_headers(TOTP_ATTACK))
     phished_code = pyotp.TOTP(secret).now()
     form = {"code": phished_code, "csrf_token": csrf_token(attacker)}
@@ -178,7 +170,7 @@ def run_passkey_part() -> dict:
     if not asked_for_passkey:
         return passkey_row("no passkey asked (login was not treated as risky)", True)
 
-    # The victim's device signs the challenge, but for the phishing origin, not the real site
+    # the device signs for the fake address, not the real one
     options_json = options_from_page(attacker, "/verify/passkey", PASSKEY_ATTACK)
     answer = fake_passkey.sign_in(device, options_json, origin=PHISHING_ORIGIN)
     form = {"credential": answer, "csrf_token": csrf_token(attacker)}
@@ -204,19 +196,20 @@ def write_csv(rows: list) -> None:
 
 def draw_chart(rows: list) -> None:
     """Draw one cell per factor: red if the phishing relay got in, green if it was refused."""
+    chart_style.use_plain_style()
     figure, axes = plt.subplots(figsize=(9, 3.4))
     for column, row in enumerate(rows):
         got_in = row["attacker_got_in"] == "yes"
-        color = "#e74c3c" if got_in else "#27ae60"
-        axes.add_patch(plt.Rectangle((column, 0), 1, 1, facecolor=color, edgecolor="white"))
         label = f"{row['outcome']}"
-        axes.text(column + 0.5, 0.5, label, ha="center", va="center", color="white", fontsize=10, wrap=True)
+        fill = "dark" if got_in else "light"
+        chart_style.draw_cell(axes, column, 0, label, fill)
 
     axes.set_xlim(0, len(rows))
     axes.set_ylim(0, 1)
     axes.set_xticks([column + 0.5 for column in range(len(rows))])
     axes.set_xticklabels([row["factor"] for row in rows])
     axes.set_yticks([])
+    chart_style.hide_axis_lines(axes)
     axes.set_title("E7: phishing relay beats a TOTP code but not a passkey")
     figure.tight_layout()
     figure.savefig(CHART_PATH, dpi=120)

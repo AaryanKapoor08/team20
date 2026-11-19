@@ -4,73 +4,132 @@
 {% block page_width %}wide{% endblock %}
 
 {% block content %}
-<h1>Admin</h1>
-<p>Logged in as {{ user["email"] }}. <a href="{{ url_for('home') }}">Back to home</a></p>
-
-<h2>Audit log</h2>
-{% if changed_row is none %}
-<p class="status-ok">Audit log OK: every entry still matches its hash.</p>
-{% else %}
-<p class="status-bad">Audit log broken: entry {{ changed_row }} was changed or removed.</p>
-{% endif %}
-
-<h2>Blocked IPs</h2>
-{% if blocked_ips %}
-<table>
-    <tr><th>IP</th><th>Reason</th><th>Since (UTC)</th><th></th></tr>
-    {% for blocked in blocked_ips %}
-    <tr>
-        <td>{{ blocked["ip"] }}</td>
-        <td>{{ blocked["reason"] }}</td>
-        <td>{{ blocked["time"] }}</td>
-        <td>
-            <form method="post" action="{{ url_for('admin.unblock') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="ip" value="{{ blocked['ip'] }}">
-                <button type="submit">Unblock</button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
-{% else %}
-<p>No blocked IPs.</p>
-{% endif %}
-
-<h2>Risk levels</h2>
-{% if risk_counts["low"] + risk_counts["medium"] + risk_counts["high"] > 0 %}
-<div style="max-width: 500px;">
-    <canvas id="risk-chart" data-counts='{{ risk_counts | tojson }}'></canvas>
+<div class="card">
+    <h1 class="card-title">Security dashboard</h1>
+    <p class="card-note">Logged in as <span class="mono">{{ user["email"] }}</span>
+        &mdash; <a href="{{ url_for('home') }}">back to home</a></p>
 </div>
-<script src="{{ url_for('static', filename='chart.umd.min.js') }}"></script>
-<script src="{{ url_for('static', filename='admin_chart.js') }}"></script>
-{% else %}
-<p>No scored logins yet. Logins are scored only in the ADAPTIVE profile.</p>
-{% endif %}
 
-<h2>Recent logins</h2>
-<table>
-    <tr><th>Time (UTC)</th><th>Email</th><th>IP</th><th>Country</th><th>Browser</th><th>Result</th><th>Risk</th><th>Reasons</th></tr>
-    {% for login in logins %}
-    <tr>
-        <td>{{ login["time"] }}</td>
-        <td>{{ login["email"] or "unknown email" }}</td>
-        <td>{{ login["ip"] }}</td>
-        <td>{{ login["country"] }}</td>
-        <td>{{ login["browser"] }} on {{ login["os"] }}</td>
-        <td>{{ "logged in" if login["success"] else "refused" }}</td>
-        <td>{{ login["risk_level"] or "-" }}</td>
-        <td>{{ login["risk_reasons"] or "" }}</td>
-    </tr>
-    {% endfor %}
-</table>
+{# The numbers worth seeing first, before any table. #}
+<div class="stats">
+    <div class="stat">
+        <div class="stat-label">Low risk</div>
+        <div class="stat-value">{{ risk_counts["low"] }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Medium risk</div>
+        <div class="stat-value">{{ risk_counts["medium"] }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">High risk</div>
+        <div class="stat-value">{{ risk_counts["high"] }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Blocked IPs</div>
+        <div class="stat-value">{{ blocked_ips | length }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Audit log</div>
+        {% if changed_row is none %}
+        <div class="stat-value small status-ok">OK</div>
+        {% else %}
+        <div class="stat-value small status-bad">BROKEN at {{ changed_row }}</div>
+        {% endif %}
+    </div>
+</div>
 
-<h2>Experiment charts</h2>
-{% if chart_names %}
-{% for name in chart_names %}
-<p><img src="{{ url_for('admin.chart', name=name) }}" alt="{{ name }}" style="max-width: 100%;"></p>
-{% endfor %}
-{% else %}
-<p>No results yet. Run the experiments to make the charts.</p>
-{% endif %}
+<div class="card">
+    <h2>Audit log</h2>
+    {% if changed_row is none %}
+    <p class="status-ok">Audit log OK: every entry still matches its hash.</p>
+    {% else %}
+    <p class="status-bad">Audit log broken: entry {{ changed_row }} was changed or removed.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Blocked IPs</h2>
+    {% if blocked_ips %}
+    <div class="table-wrap">
+        <table>
+            <tr><th>IP</th><th>Reason</th><th>Since (UTC)</th><th></th></tr>
+            {% for blocked in blocked_ips %}
+            <tr>
+                <td class="mono">{{ blocked["ip"] }}</td>
+                <td>{{ blocked["reason"] }}</td>
+                <td class="mono">{{ blocked["time"] }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('admin.unblock') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="ip" value="{{ blocked['ip'] }}">
+                        <button type="submit" class="quiet">Unblock</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% else %}
+    <p class="muted">No blocked IPs.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Risk levels</h2>
+    {% if risk_counts["low"] + risk_counts["medium"] + risk_counts["high"] > 0 %}
+    <div class="chart-box">
+        <canvas id="risk-chart" data-counts='{{ risk_counts | tojson }}'></canvas>
+    </div>
+    <script src="{{ url_for('static', filename='chart.umd.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='admin_chart.js') }}"></script>
+    {% else %}
+    <p class="muted">No scored logins yet. Logins are scored only in the ADAPTIVE profile.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Recent logins</h2>
+    <div class="table-wrap">
+        <table>
+            <tr>
+                <th>Time (UTC)</th><th>Email</th><th>IP</th><th>Country</th>
+                <th>Browser</th><th>Result</th><th>Risk</th><th>Reasons</th>
+            </tr>
+            {% for login in logins %}
+            <tr>
+                <td class="mono">{{ login["time"] }}</td>
+                <td>{{ login["email"] or "unknown email" }}</td>
+                <td class="mono">{{ login["ip"] }}</td>
+                <td>{{ login["country"] }}</td>
+                <td>{{ login["browser"] }} on {{ login["os"] }}</td>
+                <td>{{ "logged in" if login["success"] else "refused" }}</td>
+                <td>
+                    {% if login["risk_level"] %}
+                    <span class="badge badge-{{ login['risk_level'] }}">{{ login["risk_level"] }}</span>
+                    {% else %}
+                    <span class="muted">-</span>
+                    {% endif %}
+                </td>
+                <td class="reasons">{{ login["risk_reasons"] or "" }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Experiment charts</h2>
+    {% if chart_names %}
+    <div class="figures">
+        {% for name in chart_names %}
+        <figure class="figure">
+            <img src="{{ url_for('admin.chart', name=name) }}" alt="{{ name }}">
+            <figcaption>{{ name }}</figcaption>
+        </figure>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No results yet. Run the experiments to make the charts.</p>
+    {% endif %}
+</div>
 {% endblock %}

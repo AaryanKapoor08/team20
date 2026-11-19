@@ -1,16 +1,8 @@
 """E4: does a stolen session cookie still work from another device?
 
-Malware (an infostealer) can copy a logged-in user's session cookie. The question
-is whether that cookie is still useful once it leaves the victim's machine. We log
-a victim in, take their cookie, then replay it from a different browser, OS and
-network. We do this twice: once with SESSION_BINDING on (the app's default) and
-once with it off, to show exactly what the binding buys us.
-
-The binding ties a cookie to the browser, OS and network prefix it was made on
-(see app/sessions.py), so a cookie used from somewhere else is dropped.
-
-This drives the real app in-process with Flask's test client, so the result is the
-same every run and needs no separate server.
+A victim is logged in, their cookie is taken and replayed from a different browser,
+system and network. The run is done twice, with session binding on and off, to show
+what the binding is worth.
 
 Run from the project root:  python experiments/e4_stolen_session.py
 """
@@ -29,10 +21,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from experiments import chart_style
+
 from app import config
 
-# Point the app at a throwaway database and turn on the adaptive profile and lab
-# mode before importing routes, which builds the tables and demo users on startup.
+# set up the throwaway database and the profile before the app is imported
 config.DB_PATH = Path(tempfile.mkdtemp(prefix="team20_e4_")) / "startup.db"
 config.SECURITY_PROFILE = "ADAPTIVE"
 config.LAB_MODE = True
@@ -44,13 +37,11 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 CSV_PATH = RESULTS_DIR / "e4_stolen_session.csv"
 CHART_PATH = RESULTS_DIR / "e4_stolen_session.png"
 
-# The victim and their correct password; the cookie is born on their machine
+# the victim and their correct password
 VICTIM_EMAIL = "carol@example.com"
 VICTIM_PASSWORD = "carol-demo-pass"
 
-# Where the cookie is made, and where the attacker replays it from (a different
-# country, network and browser). Only the lab header changes, so the same cookie
-# travels from one context to the other.
+# where the cookie is made, and where it is replayed from
 VICTIM_CONTEXT = {
     "ip": "24.70.15.5",
     "country": "CA",
@@ -92,7 +83,7 @@ def log_in_victim(client) -> None:
 
 def cookie_still_works(client, context: dict) -> bool:
     """Return True if the home page opens with this cookie from the given context."""
-    # The test browser already carries the session cookie; only the context changes.
+    # the cookie is already there, only the place changes
     response = client.get("/", headers=lab_headers(context))
     return response.status_code == 200
 
@@ -133,19 +124,20 @@ def write_csv(rows: list) -> None:
 
 def draw_chart(rows: list) -> None:
     """Draw one cell per setting: red if the stolen cookie worked, green if it was dropped."""
+    chart_style.use_plain_style()
     figure, axes = plt.subplots(figsize=(8, 3.2))
     for column, row in enumerate(rows):
         worked = row["cookie_worked_elsewhere"] == "yes"
-        color = "#e74c3c" if worked else "#27ae60"
-        axes.add_patch(plt.Rectangle((column, 0), 1, 1, facecolor=color, edgecolor="white"))
         label = "cookie worked\n(got in)" if worked else "cookie dropped\n(session binding)"
-        axes.text(column + 0.5, 0.5, label, ha="center", va="center", color="white", fontsize=11)
+        fill = "dark" if worked else "light"
+        chart_style.draw_cell(axes, column, 0, label, fill)
 
     axes.set_xlim(0, len(rows))
     axes.set_ylim(0, 1)
     axes.set_xticks([column + 0.5 for column in range(len(rows))])
     axes.set_xticklabels([f"SESSION_BINDING {row['session_binding']}" for row in rows])
     axes.set_yticks([])
+    chart_style.hide_axis_lines(axes)
     axes.set_title("E4: a stolen cookie replayed from another device")
     figure.tight_layout()
     figure.savefig(CHART_PATH, dpi=120)

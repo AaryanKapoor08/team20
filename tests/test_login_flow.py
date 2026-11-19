@@ -20,7 +20,7 @@ CHROME_WINDOWS = (
 )
 FIREFOX_ANDROID = "Mozilla/5.0 (Android 14; Mobile; rv:130.0) Gecko/130.0 Firefox/130.0"
 
-# Lab headers for Alice's usual login, a new country (medium) and everything new (high)
+# Alice's usual login, a new country, and everything new
 HOME = {"ip": "24.1.1.1", "country": "CA", "asn": "AS812", "user_agent": CHROME_WINDOWS}
 ABROAD = {"ip": "177.2.2.2", "country": "BR", "asn": "AS28573", "user_agent": CHROME_WINDOWS}
 STRANGER = {"ip": "45.9.9.9", "country": "RU", "asn": "AS9009", "user_agent": FIREFOX_ANDROID}
@@ -283,7 +283,7 @@ def test_setup_saves_the_secret_after_one_right_code(client):
     assert b"<svg" in page.data
     assert response.headers["Location"] == "/"
     assert db.get_user_by_email(ALICE_EMAIL)["totp_secret_encrypted"] is not None
-    assert b'Authenticator app: <span class="status-ok">on</span>' in client.get("/").data
+    assert b'Authenticator app: <span class="badge badge-on">on</span>' in client.get("/").data
 
 
 def test_setup_with_wrong_code_saves_nothing(client):

@@ -1,17 +1,8 @@
-"""E5: can an attacker lock a real user out, and does risk-based handling avoid that?
+"""E5: can an attacker lock a real user out?
 
-A plain account lockout stops password guessing, but it can be turned into a denial
-of service: an attacker who sends enough wrong passwords for someone else's account
-locks the real owner out too. We show that cost, then compare it with the adaptive
-answer, which does not use a hard lockout but asks a risky login for a second factor.
-
-Both runs use the same attack (wrong passwords for alice@example.com from one IP):
-- "plain lockout": LOCKOUT_FAILURES at its normal value, so the account locks.
-- "risk-based":    no hard lockout, so the account never locks; the owner can still
-  log in from their usual device, proving themselves with a one-time code because
-  the recent burst of failures raised the risk for a few minutes.
-
-This drives the real app in-process with Flask's test client.
+The same attack, wrong passwords for someone else's account, is run twice: once with
+the plain lockout and once with the risk-based handling. We then check whether the
+real owner can still get in.
 
 Run from the project root:  python experiments/e5_lockout_abuse.py
 """
@@ -29,12 +20,14 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+from experiments import chart_style
 import pyotp
 
 from app import client_context
 from app import config
 
-# Adaptive profile and lab mode, on a throwaway database, set before importing routes.
+# set up the throwaway database and the profile before the app is imported
 config.DB_PATH = Path(tempfile.mkdtemp(prefix="team20_e5_")) / "startup.db"
 config.SECURITY_PROFILE = "ADAPTIVE"
 config.LAB_MODE = True
@@ -47,14 +40,14 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 CSV_PATH = RESULTS_DIR / "e5_lockout_abuse.csv"
 CHART_PATH = RESULTS_DIR / "e5_lockout_abuse.png"
 
-# The real account under attack, and the obviously wrong passwords spent on it
+# the account under attack, and the wrong passwords spent on it
 VICTIM_EMAIL = "alice@example.com"
 VICTIM_PASSWORD = "alice-demo-pass"
 WRONG_PASSWORDS = ["wrong1", "wrong2", "wrong3", "wrong4", "wrong5"]
-# Enough tries to pass the lockout threshold, but we stop as soon as it locks
+# enough tries to lock it, but we stop as soon as it locks
 MAX_ABUSE_TRIES = 12
 
-# The owner's usual device, and the attacker's single IP (the DoS source)
+# the owner's usual device, and the attacker's one IP
 VICTIM_CONTEXT = {
     "ip": "24.70.15.5",
     "country": "CA",
@@ -68,7 +61,7 @@ ATTACKER_CONTEXT = {
     "user_agent": "Mozilla/5.0 (python lockout abuser)",
 }
 
-# A value so high the account never reaches it: stands in for "no hard lockout"
+# so high it is never reached, which means no hard lockout
 NO_LOCKOUT = 1_000_000
 
 
@@ -95,10 +88,10 @@ def set_up_victim() -> str:
     """Give the victim a usual-device history and an authenticator app, and return its secret."""
     user_id = db.get_user_by_email(VICTIM_EMAIL)["id"]
     home = full_context(VICTIM_CONTEXT)
-    # A few past logins so the risk engine knows this is the owner's usual device
+    # a few past logins, so the engine knows the owner's usual device
     for _ in range(5):
         db.record_login_attempt(user_id, home, True)
-    # The owner has 2FA set up; we store its secret so the owner can enter a code later
+    # the owner has an app set up, so a code can be entered later
     secret = totp.new_secret()
     connection = db.get_connection()
     connection.execute(
@@ -129,7 +122,7 @@ def abuse_until_locked() -> bool:
         password = WRONG_PASSWORDS[attempt % len(WRONG_PASSWORDS)]
         attacker = routes.app.test_client()
         response = post_login(attacker, password, ATTACKER_CONTEXT)
-        # 429 is the "too many attempts" page: the account is now locked
+        # this page means the account is now locked
         if response.status_code == 429:
             return True
     return False
@@ -142,7 +135,7 @@ def owner_logs_in(secret: str) -> str:
 
     if response.status_code == 429:
         return "locked out (refused)"
-    # The recent failures raised the risk, so the owner is asked for their code
+    # the failures raised the risk, so the owner is asked for a code
     if response.status_code == 302 and response.headers.get("Location") == "/verify/totp":
         owner.get("/verify/totp", headers=lab_headers(VICTIM_CONTEXT))
         code = pyotp.TOTP(secret).now()
@@ -192,19 +185,20 @@ def write_csv(rows: list) -> None:
 
 def draw_chart(rows: list) -> None:
     """Draw one cell per handling: red if the owner is locked out, green if they get in."""
+    chart_style.use_plain_style()
     figure, axes = plt.subplots(figsize=(8.5, 3.4))
     for column, row in enumerate(rows):
         owner_out = row["owner_can_log_in"] == "no"
-        color = "#e74c3c" if owner_out else "#27ae60"
-        axes.add_patch(plt.Rectangle((column, 0), 1, 1, facecolor=color, edgecolor="white"))
         label = f"owner {row['owner_outcome']}"
-        axes.text(column + 0.5, 0.5, label, ha="center", va="center", color="white", fontsize=10, wrap=True)
+        fill = "dark" if owner_out else "light"
+        chart_style.draw_cell(axes, column, 0, label, fill)
 
     axes.set_xlim(0, len(rows))
     axes.set_ylim(0, 1)
     axes.set_xticks([column + 0.5 for column in range(len(rows))])
     axes.set_xticklabels([row["handling"] for row in rows])
     axes.set_yticks([])
+    chart_style.hide_axis_lines(axes)
     axes.set_title("E5: after a lockout attack, can the real owner still get in?")
     figure.tight_layout()
     figure.savefig(CHART_PATH, dpi=120)

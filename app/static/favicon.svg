@@ -1,8 +1,8 @@
 <!-- A small padlock for the browser tab. Drawn here so nothing is loaded from the internet. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#0f172a"/>
-  <path d="M11 14v-3a5 5 0 0 1 10 0v3" fill="none" stroke="#f8fafc" stroke-width="2.5"
+  <rect width="32" height="32" rx="7" fill="#09090b"/>
+  <path d="M11 14v-3a5 5 0 0 1 10 0v3" fill="none" stroke="#fafafa" stroke-width="2.5"
         stroke-linecap="round"/>
-  <rect x="9" y="14" width="14" height="11" rx="2.5" fill="#f8fafc"/>
-  <circle cx="16" cy="19" r="1.8" fill="#0f172a"/>
+  <rect x="9" y="14" width="14" height="11" rx="2.5" fill="#fafafa"/>
+  <circle cx="16" cy="19" r="1.8" fill="#09090b"/>
 </svg>

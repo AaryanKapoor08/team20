@@ -3,34 +3,42 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
-<h1>Home</h1>
-<p>Logged in as <strong>{{ user["email"] }}</strong> ({{ user["role"] }}).</p>
+<div class="card">
+    <h1 class="card-title">Home</h1>
+    <p class="card-note">Logged in as <span class="mono">{{ user["email"] }}</span>
+        <span class="badge">{{ user["role"] }}</span>
+    </p>
 
-<h2>Extra checks on your account</h2>
-<p>When a login looks unusual, the app asks for one of these instead of letting it in.</p>
+    <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="quiet">Log out</button>
+    </form>
+</div>
 
-{% if user["totp_secret_encrypted"] is none %}
-<p>Authenticator app: <span class="status-off">off</span>
-   &mdash; <a href="{{ url_for('step_up.setup_totp') }}">set one up</a></p>
-{% else %}
-<p>Authenticator app: <span class="status-ok">on</span></p>
-{% endif %}
+<div class="card">
+    <h2>Extra checks on your account</h2>
+    <p>When a login looks unusual, the app asks for one of these instead of letting it in.</p>
 
-{% if has_passkey %}
-<p>Passkey: <span class="status-ok">on</span>
-   &mdash; <a href="{{ url_for('step_up.setup_passkey') }}">add another</a></p>
-{% else %}
-<p>Passkey: <span class="status-off">off</span>
-   &mdash; <a href="{{ url_for('step_up.setup_passkey') }}">add one</a></p>
-{% endif %}
+    {% if user["totp_secret_encrypted"] is none %}
+    <p>Authenticator app: <span class="badge badge-off">off</span>
+       &mdash; <a href="{{ url_for('step_up.setup_totp') }}">set one up</a></p>
+    {% else %}
+    <p>Authenticator app: <span class="badge badge-on">on</span></p>
+    {% endif %}
+
+    {% if has_passkey %}
+    <p>Passkey: <span class="badge badge-on">on</span>
+       &mdash; <a href="{{ url_for('step_up.setup_passkey') }}">add another</a></p>
+    {% else %}
+    <p>Passkey: <span class="badge badge-off">off</span>
+       &mdash; <a href="{{ url_for('step_up.setup_passkey') }}">add one</a></p>
+    {% endif %}
+</div>
 
 {% if user["role"] == "admin" %}
-<h2>Admin</h2>
-<p><a href="{{ url_for('admin.dashboard_page') }}">Open the security dashboard</a></p>
+<div class="card">
+    <h2>Admin</h2>
+    <p><a href="{{ url_for('admin.dashboard_page') }}">Open the security dashboard</a></p>
+</div>
 {% endif %}
-
-<form method="post" action="{{ url_for('logout') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit">Log out</button>
-</form>
 {% endblock %}

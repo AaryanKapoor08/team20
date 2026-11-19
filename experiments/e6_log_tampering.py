@@ -1,12 +1,7 @@
-"""E6: can someone quietly edit the audit log without being caught?
+"""E6: can someone quietly edit the audit log?
 
-The audit log is hash-chained: each row stores the hash of the row before it, and
-its own hash covers its contents (see app/audit_log.py). We build a clean chain,
-check it, then change one row's details directly in the database with plain SQL and
-check again. verify_chain() should report the exact row that was edited, because a
-changed row no longer matches its stored hash.
-
-This runs entirely against a throwaway database; no server is needed.
+A clean log is built and checked, then one row is changed straight in the database
+with SQL and the check is run again. It should name the exact row that was edited.
 
 Run from the project root:  python experiments/e6_log_tampering.py
 """
@@ -24,6 +19,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from experiments import chart_style
+
 from app import config
 
 config.DB_PATH = Path(tempfile.mkdtemp(prefix="team20_e6_")) / "experiment.db"
@@ -35,7 +32,7 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 CSV_PATH = RESULTS_DIR / "e6_log_tampering.csv"
 CHART_PATH = RESULTS_DIR / "e6_log_tampering.png"
 
-# A realistic run of security events to fill the log
+# a normal run of events to fill the log
 EVENTS = [
     ("login_success", {"user_id": 2, "ip": "24.70.15.5"}),
     ("login_failed", {"user_id": 3, "ip": "203.0.113.9", "reason": "wrong password"}),
@@ -46,7 +43,7 @@ EVENTS = [
     ("session_ended", {"user_id": 2, "ip": "185.199.84.7", "reason": "used from another device"}),
 ]
 
-# The row an attacker tries to rewrite (for example, to hide that they were blocked)
+# the row an attacker would rewrite to hide what they did
 EDITED_ROW = 5
 
 
@@ -107,22 +104,23 @@ def write_csv(rows: list) -> None:
 def draw_chart(rows: list) -> None:
     """Draw the log as a row of cells: green verified, red the edited row, grey after it."""
     total = len(EVENTS)
+    chart_style.use_plain_style()
     figure, axes = plt.subplots(figsize=(10, 2.6))
     for index in range(total):
         row_id = index + 1
         if row_id < EDITED_ROW:
-            color, label = "#27ae60", "ok"
+            fill, label = "light", "ok"
         elif row_id == EDITED_ROW:
-            color, label = "#e74c3c", "edited"
+            fill, label = "dark", "edited"
         else:
-            color, label = "#95a5a6", "unchecked"
-        axes.add_patch(plt.Rectangle((index, 0), 1, 1, facecolor=color, edgecolor="white"))
-        axes.text(index + 0.5, 0.5, f"row {row_id}\n{label}", ha="center", va="center", color="white", fontsize=9)
+            fill, label = "pale", "unchecked"
+        chart_style.draw_cell(axes, index, 0, f"row {row_id}\n{label}", fill)
 
     axes.set_xlim(0, total)
     axes.set_ylim(0, 1)
     axes.set_xticks([])
     axes.set_yticks([])
+    chart_style.hide_axis_lines(axes)
     axes.set_title(f"E6: editing row {EDITED_ROW} breaks the hash chain at row {EDITED_ROW}")
     figure.tight_layout()
     figure.savefig(CHART_PATH, dpi=120)

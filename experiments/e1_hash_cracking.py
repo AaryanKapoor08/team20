@@ -1,17 +1,8 @@
-"""E1: how hard is it to crack a password hash?
+"""E1: how hard is it to crack a stolen password hash?
 
-We hash the same passwords with four algorithms and compare them two ways:
-
-1. Speed: how many hashes one CPU core can make per second. A fast hash (MD5,
-   SHA-256) lets an attacker try billions of guesses; a slow hash (bcrypt,
-   Argon2id) is slow on purpose, so the same guessing takes far longer.
-2. A small dictionary attack: with a fixed time budget, how many weak passwords
-   each hash type lets the attacker crack.
-
-This is why the app stores passwords with Argon2id (see app/passwords.py), not a
-plain fast hash. hashcat (step 16.3) is the real cracking tool, but it needs a GPU
-build and a separate install; if it is not on PATH we report that and keep the
-Python measurement, which makes the same point and runs anywhere.
+The same passwords are hashed with MD5, SHA-256, bcrypt and Argon2id. We measure how
+many guesses a second each one allows, then run a small dictionary attack to see how
+many weak passwords fall in a fixed time.
 
 Run from the project root:  python experiments/e1_hash_cracking.py
 """
@@ -23,31 +14,32 @@ import sys
 import time
 from pathlib import Path
 
-# Running the file directly puts experiments/ on the path, not the project root.
+# add the project root, so the app package can be imported
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import bcrypt
 import matplotlib
 
-# Draw to a file, not a window, so the script runs with no screen attached
+# draw to a file, so no screen is needed
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+from experiments import chart_style
 from argon2 import PasswordHasher
 
 RESULTS_DIR = PROJECT_ROOT / "results"
 CSV_PATH = RESULTS_DIR / "e1_hash_cracking.csv"
 CHART_PATH = RESULTS_DIR / "e1_hash_cracking.png"
 
-# A guess an attacker would make. We hash this over and over to measure speed.
+# hashed over and over to measure speed
 SAMPLE_PASSWORD = "correct horse battery"
 
-# The same settings the app uses, so the numbers match our real password storage
+# the same settings the app uses, so the numbers match
 ARGON2 = PasswordHasher()
 BCRYPT_ROUNDS = 12
 
-# The five weak passwords we pretend the stolen database holds. A wordlist attack
-# finds these; the three strong ones below never appear in any list.
+# weak passwords a wordlist finds, and strong ones it never does
 WEAK_PASSWORDS = ["123456", "password", "qwerty", "letmein", "welcome"]
 STRONG_PASSWORDS = ["S7!xQ2#mLp", "9z$Vr8@Tn4", "Hk3^Wd6&Bq"]
 TARGET_PASSWORDS = WEAK_PASSWORDS + STRONG_PASSWORDS
@@ -66,15 +58,15 @@ def build_wordlist() -> list:
     return filler + WEAK_PASSWORDS
 
 
-# How many never-matching entries the attacker wades through before the weak ones
+# wrong guesses the attacker wades through first
 WORDLIST_FILLER = 4000
 
-# How long the attacker is allowed to spend on each target hash
+# how long the attacker gets per password
 CRACK_BUDGET_SECONDS = 1.5
 
 WORDLIST = build_wordlist()
 
-# A real leaked list to put the speed in context (rockyou.txt line count)
+# the size of a real leaked list, for comparison
 ROCKYOU_SIZE = 14_344_391
 
 
@@ -102,7 +94,7 @@ def measure_speed(hash_once, max_seconds: float = 2.0, max_count: int = 500_000)
     """Return how many hashes per second this algorithm makes on one core."""
     count = 0
     start = time.perf_counter()
-    # Keep hashing until either the time budget or the count cap is reached
+    # keep going until the time or the count runs out
     while True:
         hash_once(SAMPLE_PASSWORD)
         count += 1
@@ -136,7 +128,7 @@ def run_dictionary_attack(make_hash, verify) -> int:
     return cracked
 
 
-# Each algorithm as (name, hash function, verify function) so one loop handles all four
+# name, hash function and check function, so one loop does all four
 def match_plain(guess: str, target: str, make_hash) -> bool:
     """Verify a guess for a plain hash by hashing it and comparing the text."""
     return make_hash(guess) == target
@@ -197,17 +189,22 @@ def draw_chart(rows: list) -> None:
     speeds = [row["hashes_per_second"] for row in rows]
     percents = [row["percent_cracked"] for row in rows]
 
+    chart_style.use_plain_style()
     figure, (left, right) = plt.subplots(1, 2, figsize=(11, 4.5))
 
-    left.bar(names, speeds, color="#c0392b")
+    left.bar(names, speeds, color=chart_style.MID, edgecolor=chart_style.INK, width=0.6)
     left.set_yscale("log")
     left.set_ylabel("guesses per second (log scale)")
     left.set_title("Hashing speed: lower is safer")
+    left.grid(axis="y", linewidth=0.8)
+    left.set_axisbelow(True)
 
-    right.bar(names, percents, color="#2980b9")
+    right.bar(names, percents, color=chart_style.INK, width=0.6)
     right.set_ylim(0, 100)
     right.set_ylabel("weak passwords cracked (%)")
     right.set_title(f"Cracked in a {CRACK_BUDGET_SECONDS:g} s dictionary attack")
+    right.grid(axis="y", linewidth=0.8)
+    right.set_axisbelow(True)
 
     figure.suptitle("E1: fast hashes crack passwords, slow hashes resist")
     figure.tight_layout()
