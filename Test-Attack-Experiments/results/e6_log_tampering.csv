@@ -1,0 +1,3 @@
+scenario,rows_in_log,edited_row,verify_chain_reports,tampering_detected
+clean chain,7,-,no break,n/a
+one row edited,7,5,row 5,yes
