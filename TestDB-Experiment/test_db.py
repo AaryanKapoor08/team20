@@ -28,6 +28,7 @@ def count_users():
 
 
 def test_every_table_exists(temp_db):
+    """Check generated tables"""
     assert table_names() == ALL_TABLES
 
 
