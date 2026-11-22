@@ -38,6 +38,7 @@ def test_making_tables_twice_is_fine(temp_db):
 
 
 def test_rows_can_be_read_by_name(temp_db):
+    """Check new created users"""
     connection = db.get_connection()
     connection.execute("INSERT INTO users (email, password_hash) VALUES (?, ?)", ("alice@example.com", "x"))
     row = connection.execute("SELECT * FROM users").fetchone()
@@ -47,6 +48,7 @@ def test_rows_can_be_read_by_name(temp_db):
 
 
 def test_time_text_looks_right():
+    """Check time format"""
     now_text = db.utc_now()
     assert len(now_text) == 19
     assert datetime.strptime(now_text, db.TIME_FORMAT).strftime(db.TIME_FORMAT) == now_text
