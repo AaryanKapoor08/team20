@@ -135,7 +135,7 @@ def count_flagged(scores):
 
 
 def save_results(rows):
-    """Write the CSV and draw the chart."""
+    """Write the CSV and draw the chart for analysis."""
     with open(CSV_PATH, "w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=list(rows[0].keys()))
         writer.writeheader()
