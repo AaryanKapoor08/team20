@@ -64,10 +64,12 @@ def test_seed_twice_adds_nothing_more(temp_db):
 
 
 def test_demo_password_works(temp_db):
+    """Check given password is matched"""
     db.seed_demo_users("test-pepper")
     user = db.get_user_by_email("alice@example.com")
     assert passwords.check_password(user["password_hash"], "alice-demo-pass", "test-pepper")
 
 
 def test_unknown_email_gives_none(temp_db):
+    """Check non-existing user email"""
     assert db.get_user_by_email("nobody@example.com") is None
