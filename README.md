@@ -314,10 +314,10 @@ start with matching results.
 
 ![E1 chart](results/e1_hash_cracking.png)
 
-Guessing speed on this machine: **MD5 ~1.38 million/s, SHA-256 ~1.19 million/s, bcrypt ~5/s,
-Argon2id ~16/s.** In the crack budget, MD5 and SHA-256 recover every weak password; bcrypt and
-Argon2id recover none. A fast hash lets an attacker try millions of guesses a second against a
-stolen database; Argon2id (what the app uses) makes that roughly a hundred thousand times slower.
+Guessing speed on this machine: **MD5 ~591,000/s, SHA-256 ~488,000/s, bcrypt ~3.4/s,
+Argon2id ~13.5/s.** In the crack budget, MD5 and SHA-256 recover every weak password; bcrypt and
+Argon2id recover none. A fast hash lets an attacker try hundreds of thousands of guesses a second
+against a stolen database; Argon2id (what the app uses) makes that about 44,000 times slower.
 
 ## E2 — Which attacker gets in, and what stops it
 
