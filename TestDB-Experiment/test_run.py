@@ -13,7 +13,7 @@ def clean_env(monkeypatch):
 
 
 def test_no_flags_change_nothing(clean_env):
-     """Check flags if on the list"""
+    """Check flags if on the list"""
     run.read_flags([])
     assert "SECURITY_PROFILE" not in os.environ
     assert "LAB_MODE" not in os.environ
